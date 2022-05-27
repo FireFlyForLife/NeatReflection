@@ -7,7 +7,6 @@
 #include <string_view>
 #include <utility>
 #include <vector>
-#include <memory>
 #include <span>
 #include <cassert>
 
@@ -27,6 +26,7 @@ namespace Neat
 
 	REFL_API Type& add_type(Type&&);
 
+	REFL_API std::span<Type> get_types();
 	REFL_API Type* get_type(std::string_view type_name);
 	REFL_API Type* get_type(TemplateTypeId type_id);
 	template<typename T>
@@ -41,17 +41,23 @@ namespace Neat
 		std::string name;
 		TemplateTypeId id;
 		std::vector<std::string> bases;
-		std::vector<std::unique_ptr<Field>> fields;
-		std::vector<std::unique_ptr<Method>> methods;
+		std::vector<Field> fields;
+		std::vector<Method> methods;
 	};
 
 	struct REFL_API Field
 	{
-		virtual ~Field() = default;
+		// Functions
+		template<typename TObject, typename TType, TType TObject::* PtrToMember>
+		static Field create(std::string_view name);
 
-		virtual std::any get(void* object) = 0;
-		virtual void set(void* object, std::any value) = 0;
+		using GetValueFunction = std::any (*)(void* object);
+		using SetValueFunction = void (*)(void* object, std::any value);
 
+		GetValueFunction get_value;
+		SetValueFunction set_value;
+
+		// Data
 		Type* object_type;
 		Type* type;
 		std::string name;
@@ -60,63 +66,70 @@ namespace Neat
 
 	struct REFL_API Method
 	{
-		virtual ~Method() = default;
+		// Functions
+		template<auto PtrToMemberFunction, typename TObject, typename TReturn, typename... TArgs>
+		static Method create(std::string_view name);
 
-		virtual std::any invoke(void* object, std::span<std::any> arguments) = 0;
+		using InvokeFunction = std::any (*)(void* object, std::span<std::any> arguments);
+		
+		InvokeFunction invoke;
 
+		// Data
 		Type* object_type;
 		Type* return_type;
 		std::string name;
 		std::vector<Type*> argument_types;
 	};
+
 }
 
 
 // Implementation
 // ===========================================================================
 
-namespace Neat::Detail
+namespace Neat
 {
-	template<typename TObject, typename TType, TType TObject::* ptr_to_member>
-	struct FieldImpl final : Field
+	namespace Detail
 	{
-		FieldImpl(std::string_view name)
-		{
-			this->object_type = get_type<TObject>();
-			this->type = get_type<TType>();
-			this->name = name;
-		}
-
-		std::any get(void* object) final
+		template<typename TObject, typename TType, TType TObject::* PtrToMember>
+		std::any get_value_erased(void* object)
 		{
 			TObject* object_ = reinterpret_cast<TObject*>(object);
-			return { object_->*ptr_to_member };
+			return { object_->*PtrToMember };
 		}
 
-		void set(void* object, std::any value) final
+		template<typename TObject, typename TType, TType TObject::* PtrToMember>
+		void set_value_erased(void* object, std::any value)
 		{
 			assert(std::any_cast<TType>(&value) != nullptr);
 
 			TObject* object_ = reinterpret_cast<TObject*>(object);
-			object_->*ptr_to_member = std::any_cast<TType>(value);
+			object_->*PtrToMember = std::any_cast<TType>(value);
 		}
-	};
+	}
 
-
-	template<typename TObject, typename TReturn, typename... TArgs>
-	struct MethodImpl final : Method
+	template<typename TObject, typename TType, TType TObject::* PtrToMember>
+	Field Field::create(std::string_view name)
 	{
-		using PtrToMemberFunc = TReturn (TObject::*)(TArgs...);
+		return Field{
+			.get_value = &Detail::get_value_erased<TObject, TType, PtrToMember>,
+			.set_value = &Detail::set_value_erased<TObject, TType, PtrToMember>,
+			.object_type = get_type<TObject>(),
+			.type = get_type<TType>(),
+			.name = std::string{ name }
+		};
+	}
 
-		MethodImpl(std::string_view name, PtrToMemberFunc ptr_to_memberfunc)
-		{
-			this->object_type = get_type<TObject>();
-			this->return_type = get_type<TReturn>();
-			this->name = name;
-			this->ptr_to_memberfunc = ptr_to_memberfunc;
-		}
+	namespace Detail
+	{
+		template<typename T, typename E>
+		struct IsSame { constexpr static bool value = false; };
 
-		std::any invoke(void* object, std::span<std::any> arguments) final
+		template<typename T>
+		struct IsSame<T, T> { constexpr static bool value = true; };
+
+		template<auto PtrToMemberFunction, typename TObject, typename TReturn, typename ...TArgs>
+		std::any invoke_erased(void* object, std::span<std::any> arguments)
 		{
 			assert(arguments.size() == sizeof...(TArgs));
 			// TODO: Validate arg types
@@ -126,15 +139,28 @@ namespace Neat::Detail
 
 			if constexpr (std::is_same_v<TReturn, void>)
 			{
-				(object_->*ptr_to_memberfunc)(std::any_cast<TArgs>(*(arg_it++))...);
+				(object_->*PtrToMemberFunction)(std::any_cast<TArgs>(*(arg_it++))...);
 				return {};
 			}
 			else
 			{
-				return { (object_->*ptr_to_memberfunc)(std::any_cast<TArgs>(*(arg_it++))...) };
+				return { (object_->*PtrToMemberFunction)(std::any_cast<TArgs>(*(arg_it++))...) };
 			}
 		}
+	}
 
-		PtrToMemberFunc ptr_to_memberfunc;
-	};
+	template<auto PtrToMemberFunction, typename TObject, typename TReturn, typename ...TArgs>
+	Method Method::create(std::string_view name)
+	{
+		static_assert(Detail::IsSame<decltype(PtrToMemberFunction), TReturn (TObject::*)(TArgs...)>::value,
+			"PtrToMemberFunction needs to be a value of type `TReturn (TObject::*)(TArgs...)`");
+
+		return Method{
+			.invoke = &Detail::invoke_erased<PtrToMemberFunction, TObject, TReturn, TArgs...>,
+			.object_type = get_type<TObject>(),
+			.return_type = get_type<TReturn>(),
+			.name = std::string{name}
+			// TODO: Argument types
+		};
+	}
 }

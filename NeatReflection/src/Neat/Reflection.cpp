@@ -24,6 +24,11 @@ namespace Neat
 		return type_container.types.back();
 	}
 
+	std::span<Type> Neat::get_types()
+	{
+		return { type_container.types.begin(), type_container.types.end() };
+	}
+
 	Type* get_type(std::string_view type_name)
 	{
 		auto it = type_container.by_type_name.find(std::string{ type_name }); // TODO: Avoid allocation
@@ -43,5 +48,4 @@ namespace Neat
 		}
 		return &type_container.types[it->second];
 	}
-
 }
