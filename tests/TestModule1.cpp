@@ -13,3 +13,8 @@ void MyStruct::helper_function()
 {
 	std::cout << "Module Method Called!\n";
 }
+
+void MyStruct::argumented_function(int i, int)
+{
+	std::cout << "Module Argumented Method Called With:" << i << "!\n";
+}

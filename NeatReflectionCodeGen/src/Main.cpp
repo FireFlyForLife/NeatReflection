@@ -63,7 +63,7 @@ int main(int argc, char const *argv[])
     const std::vector<std::string> arguments{ argv + 1, argv + argc };
     docopt::Options parsed = docopt::docopt(USAGE, arguments, true, "0.1");
 
-    if (parsed["scan"])
+    if (parsed["scan"].asBool())
     {
         const std::filesystem::path target_dir = parsed["<in_dir>"].asString();
         const std::filesystem::path output_dir = parsed["<out_dir>"].asString();

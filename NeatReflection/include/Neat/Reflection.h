@@ -40,7 +40,7 @@ namespace Neat
 	{
 		std::string name;
 		TemplateTypeId id;
-		std::vector<std::string> bases;
+		std::vector<TemplateTypeId> bases;
 		std::vector<Field> fields;
 		std::vector<Method> methods;
 	};
@@ -58,8 +58,8 @@ namespace Neat
 		SetValueFunction set_value;
 
 		// Data
-		Type* object_type;
-		Type* type;
+		TemplateTypeId object_type;
+		TemplateTypeId type;
 		std::string name;
 		std::vector<std::string> attributes;
 	};
@@ -75,12 +75,11 @@ namespace Neat
 		InvokeFunction invoke;
 
 		// Data
-		Type* object_type;
-		Type* return_type;
+		TemplateTypeId object_type;
+		TemplateTypeId return_type;
 		std::string name;
-		std::vector<Type*> argument_types;
+		std::vector<TemplateTypeId> argument_types;
 	};
-
 }
 
 
@@ -114,8 +113,8 @@ namespace Neat
 		return Field{
 			.get_value = &Detail::get_value_erased<TObject, TType, PtrToMember>,
 			.set_value = &Detail::set_value_erased<TObject, TType, PtrToMember>,
-			.object_type = get_type<TObject>(),
-			.type = get_type<TType>(),
+			.object_type = get_id<TObject>(),
+			.type = get_id<TType>(),
 			.name = std::string{ name }
 		};
 	}
@@ -157,10 +156,10 @@ namespace Neat
 
 		return Method{
 			.invoke = &Detail::invoke_erased<PtrToMemberFunction, TObject, TReturn, TArgs...>,
-			.object_type = get_type<TObject>(),
-			.return_type = get_type<TReturn>(),
-			.name = std::string{name}
-			// TODO: Argument types
+			.object_type = get_id<TObject>(),
+			.return_type = get_id<TReturn>(),
+			.name = std::string{name},
+			.argument_types = {get_id<TArgs>()...}
 		};
 	}
 }

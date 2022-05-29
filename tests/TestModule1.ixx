@@ -9,4 +9,5 @@ export struct MyStruct : BaseStruct
 	double damage;
 
 	void helper_function();
+	void argumented_function(int i, int);
 };
