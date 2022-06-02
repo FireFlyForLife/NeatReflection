@@ -124,7 +124,7 @@ CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_n
 			const auto type = render_full_typename(field.type);
 			const auto name = file.get_string(field.name);
 
-			fields += std::format(R"(Field::create<{1}, {2}, &{1}::{3}>("{3}"), )", type_variable, type_name, type, name);
+			fields += std::format(R"(Field::create<{0}, {1}, &{0}::{2}>("{2}"), )", type_name, type, name);
 			break;
 		}
 		case ifc::DeclSort::Method:
@@ -140,7 +140,7 @@ CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_n
 			}
 			const auto name = get_user_type_name(file, method.name);
 
-			methods += std::format(R"(Method::create<&{1}::{4}, {1}, {2}{3}>("{4}"), )", type_variable, type_name, return_type, param_types, name);
+			methods += std::format(R"(Method::create<&{0}::{3}, {0}, {1}{2}>("{3}"), )", type_name, return_type, param_types, name);
 			break;
 		}
 		}
