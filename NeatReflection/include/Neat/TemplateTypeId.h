@@ -8,7 +8,6 @@ namespace Neat
 {
 	using TemplateTypeId = uint32_t;
 
-	// NOTE: Not thread-safe 
 	REFL_API TemplateTypeId generate_new_type_id();
 
 	template<typename T>

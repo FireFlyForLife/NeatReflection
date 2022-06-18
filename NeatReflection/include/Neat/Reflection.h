@@ -61,7 +61,7 @@ namespace Neat
 		TemplateTypeId object_type;
 		TemplateTypeId type;
 		std::string name;
-		std::vector<std::string> attributes;
+		std::vector<std::string> attributes; // Unused currently
 	};
 
 	struct REFL_API Method
@@ -79,6 +79,7 @@ namespace Neat
 		TemplateTypeId return_type;
 		std::string name;
 		std::vector<TemplateTypeId> argument_types;
+		std::vector<std::string> attributes; // Unused currently
 	};
 }
 

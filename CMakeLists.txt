@@ -20,6 +20,12 @@ option(NEAT_REFLECTION_BUILD_TESTING "Enable tests for NeatReflection" ON)
 
 
 # Public CMake Functions
+
+# Create a new CMake target named `reflection_data_target_name`, which will contain reflection data from target `target_name`
+# To use this reflection name simply link it with you exe or dll: 
+# 
+# add_reflection_target(MyAwesomeLibrary_ReflectionData MyAwesomeLibrary)
+# target_link_libraries(MyExeTarget MyAwesomeLibrary_ReflectionData)
 function(add_reflection_target reflection_data_target_name target_name)
 
 	get_target_property(_TARGET__BINARY_DIR ${target_name} BINARY_DIR)
