@@ -15,7 +15,7 @@ FetchContent_MakeAvailable(docopt ifc-reader)
 
 
 # Executable
-add_executable(NeatReflectionCodeGen "src/Main.cpp" "include/CodeGenerator.h" "src/CodeGenerator.cpp")
-target_compile_features(NeatReflectionCodeGen PUBLIC cxx_std_20)
+add_executable(NeatReflectionCodeGen "src/Main.cpp" "include/CodeGenerator.h" "src/CodeGenerator.cpp" "include/CodeGenExceptions.h" "src/CodeGenExceptions.cpp" "include/ManualAttributeParser.h" "src/ManualAttributeParser.cpp")
+target_compile_features(NeatReflectionCodeGen PUBLIC cxx_std_23)
 target_include_directories(NeatReflectionCodeGen PUBLIC "include")
 target_link_libraries(NeatReflectionCodeGen PUBLIC NeatReflection docopt_s ifc-core)

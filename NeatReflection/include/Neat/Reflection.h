@@ -52,9 +52,9 @@ namespace Neat
 		static Field create(std::string_view name);
 
 		using GetValueFunction = std::any (*)(void* object);
-		using SetValueFunction = void (*)(void* object, std::any value);
-
 		GetValueFunction get_value;
+
+		using SetValueFunction = void (*)(void* object, std::any value);
 		SetValueFunction set_value;
 
 		// Data

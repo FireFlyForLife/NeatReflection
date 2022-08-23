@@ -1,5 +1,8 @@
 #include "CodeGenerator.h"
 
+#include "CodeGenExceptions.h"
+#include "ManualAttributeParser.h"
+
 #include <format>
 #include <cassert>
 #include <cctype>
@@ -317,6 +320,19 @@ std::string CodeGenerator::render(ifc::Qualifiers qualifiers)
 
 	return rendered;
 }
+
+std::string CodeGenerator::render_attributes(const ifc::ScopeDeclaration& scope_decl)
+{
+	// Get previous ifc symbol
+	ifc::SourceLocation from{};
+
+	// Parse attributes
+	const auto src_file = file.get_string(file.header().src_path);
+	auto attributes = Experimental::parse_attributes_from_source(src_file, from, scope_decl.locus);
+
+	return "";
+}
+
 
 
 std::string_view get_user_type_name(const ifc::File& file, ifc::NameIndex name)

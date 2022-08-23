@@ -32,6 +32,8 @@ private:
 
 	std::string render(ifc::Qualifiers qualifiers);
 
+	std::string render_attributes(const ifc::ScopeDeclaration& scope_decl);
+
 private:
 	ifc::File& file;
 	std::string code;
