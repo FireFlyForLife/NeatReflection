@@ -100,6 +100,7 @@ void CodeGenerator::render(std::string_view type_name, const ifc::ScopeDeclarati
 	auto var_name = to_snake_case(type_name) + '_';
 	auto scope_descriptor = file.scope_descriptors()[scope_decl.initializer];
 	auto [fields, methods] = render_members(type_name, var_name, scope_descriptor);
+	auto attributes = render_attributes(scope_decl);
 
 	code += std::format(R"(add_type({{ "{1}", get_id<{1}>(),
 	{{ {2} }},
@@ -124,6 +125,10 @@ CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_n
 			const auto& field = file.fields()[decl.index];
 			const auto type = render_full_typename(field.type);
 			const auto name = file.get_string(field.name);
+
+			ifc::SourceLocation from{};
+			const auto src_file = file.get_string(file.header().src_path);
+			auto attributes = Experimental::parse_type_attributes_from_source(src_file, from, field.locus, file.file_and_lines() );
 
 			fields += std::format(R"(Field::create<{0}, {1}, &{0}::{2}>("{2}"), )", type_name, type, name);
 			break;
@@ -323,12 +328,21 @@ std::string CodeGenerator::render(ifc::Qualifiers qualifiers)
 
 std::string CodeGenerator::render_attributes(const ifc::ScopeDeclaration& scope_decl)
 {
-	// Get previous ifc symbol
-	ifc::SourceLocation from{};
+	auto kind = ifc::get_kind(scope_decl, file);
 
-	// Parse attributes
-	const auto src_file = file.get_string(file.header().src_path);
-	auto attributes = Experimental::parse_attributes_from_source(src_file, from, scope_decl.locus);
+	// Only class/struct is supported atm. Since the syntax follows the easily parseable:
+	// [keyword class/struct] [attributes...] [typename]
+	if (kind == ifc::TypeBasis::Class || kind == ifc::TypeBasis::Struct)
+	{
+		auto keyword = (kind == ifc::TypeBasis::Class ? "class" : "struct");
+
+		// Get previous ifc symbol
+		ifc::SourceLocation from{};
+
+		// Parse attributes
+		const auto src_file = file.get_string(file.header().src_path);
+		auto attributes = Experimental::parse_type_attributes_from_source(src_file, from, scope_decl.locus, file.file_and_lines());
+	}
 
 	return "";
 }

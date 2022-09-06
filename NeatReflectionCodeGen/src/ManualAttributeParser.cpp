@@ -8,10 +8,12 @@
 #include <cstring>
 
 #include <iostream>
+#include <ifc/File.h>
 
 namespace Experimental
 {
-	std::vector<ParsedAttribute> parse_attributes_from_source(const std::filesystem::path& source, ifc::SourceLocation from, ifc::SourceLocation to)
+	std::vector<ParsedAttribute> parse_type_attributes_from_source(const std::filesystem::path& source, ifc::SourceLocation from, ifc::SourceLocation to, 
+		const ifc::Partition<ifc::FileAndLine, ifc::LineIndex>& file_and_line_partition)
 	{
 		// Load file
 		if (!std::filesystem::exists(source))
@@ -36,17 +38,20 @@ namespace Experimental
 		}
 
 		// Trunctuate to what we are interested in
+		uint32_t from_line = 1;//(uint32_t)file_and_line_partition[from.line].line;
+		uint32_t to_line = (uint32_t)file_and_line_partition[to.line].line;
+
 		std::string to_be_parsed;
-		for (auto c = (uint32_t)from.line-1; c <= (uint32_t)to.line-1; ++c)
+		for (auto c = from_line - 1; c <= to_line - 1; ++c)
 		{
 			uint32_t start = 0;
 			uint32_t end = lines[c].size()-1;
 
-			if (c == (uint32_t)from.line-1)
+			if (c == from_line - 1)
 			{
 				start = (uint32_t)from.column;
 			}
-			if (c == (uint32_t)to.line-1)
+			if (c == to_line - 1)
 			{
 				end = (uint32_t)to.column;
 			}

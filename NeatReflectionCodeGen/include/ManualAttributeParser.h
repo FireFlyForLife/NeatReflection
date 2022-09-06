@@ -1,5 +1,6 @@
 #pragma once
 #include <ifc/SourceLocation.h>
+#include <ifc/Partition.h>
 
 #include <string>
 #include <vector>
@@ -15,5 +16,6 @@ namespace Experimental
 	};
 
 	// In the future we should run the pre-processor on the file
-	std::vector<ParsedAttribute> parse_attributes_from_source(const std::filesystem::path& source, ifc::SourceLocation from, ifc::SourceLocation to);
+	std::vector<ParsedAttribute> parse_type_attributes_from_source(const std::filesystem::path& source, ifc::SourceLocation from, ifc::SourceLocation to, 
+		const ifc::Partition<ifc::FileAndLine, ifc::LineIndex>& file_and_line_partition);
 }
