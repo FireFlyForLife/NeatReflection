@@ -1,5 +1,7 @@
 #include "CodeGenerator.h"
 
+#include <ContextualException.h>
+
 #include <iostream>
 #include <fstream>
 #include <map>
@@ -22,8 +24,10 @@ public:
     }
 };
 
-bool convert_ifc_file(const std::string& ifc_filename, const std::string& cpp_filename)
+bool convert_ifc_file(const std::string& ifc_filename, const std::string& cpp_filename) try
 {
+    ContextArea filename_context{ std::format("While loading ifc file: '{0}'.\nAnd preparing to output to: '{1}'", ifc_filename, cpp_filename) };
+
     if (!std::filesystem::exists(ifc_filename))
     {
         std::cout << "ERROR: in_ifc_file: '" << ifc_filename << "' does not exist.";
@@ -54,6 +58,10 @@ bool convert_ifc_file(const std::string& ifc_filename, const std::string& cpp_fi
     code_generator.write_cpp_file(file_stream);
 
     return true;
+}
+catch (...)
+{
+    return false;
 }
 
 int main(int argc, char const *argv[])

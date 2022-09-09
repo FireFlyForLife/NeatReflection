@@ -25,12 +25,16 @@ private:
 	void render(std::string_view type_name, const ifc::ScopeDeclaration& scope_decl);
 	struct TypeMembers { std::string fields, methods; };
 	TypeMembers render_members(std::string_view object, std::string_view type_variable, ifc::ScopeDescriptor scope_desc);
+	std::string render_bases(const ifc::ScopeDeclaration& scope_decl);
 	
 	std::string render_full_typename(ifc::TypeIndex type_index);
 	std::string render_full_typename(const ifc::FundamentalType& type);
 	std::string render_full_typename(const ifc::TupleType& types);
 
+	std::string render_refered_declaration(const ifc::DeclIndex& decl_index);
+
 	std::string render(ifc::Qualifiers qualifiers);
+	std::string render_as_neat_access_enum(ifc::Access access, std::string_view value_for_none = "");
 
 private:
 	ifc::File& file;

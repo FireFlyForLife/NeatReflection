@@ -25,7 +25,7 @@ option(NEAT_REFLECTION_BUILD_TESTING "Enable tests for NeatReflection" ON)
 # To use this reflection name simply link it with you exe or dll: 
 # 
 # add_reflection_target(MyAwesomeLibrary_ReflectionData MyAwesomeLibrary)
-# target_link_libraries(MyExeTarget MyAwesomeLibrary_ReflectionData)
+# target_link_libraries(MyExeTarget MyAwesomeLibrary MyAwesomeLibrary_ReflectionData)
 function(add_reflection_target reflection_data_target_name target_name)
 
 	get_target_property(_TARGET__BINARY_DIR ${target_name} BINARY_DIR)
@@ -34,7 +34,8 @@ function(add_reflection_target reflection_data_target_name target_name)
 	
 	list(FILTER _TARGET__SOURCES INCLUDE REGEX ".ixx")
 	foreach(_TARGET__SOURCE ${_TARGET__SOURCES})
-		list(APPEND _REFLECTION_TARGET_SOURCES "${_TARGET__BINARY_DIR}/${_TARGET__SOURCE}.cpp")
+		cmake_path(GET _TARGET__SOURCE FILENAME _TARGET__SOURCE_FILENAME)
+		list(APPEND _REFLECTION_TARGET_SOURCES "${_TARGET__BINARY_DIR}/${_TARGET__SOURCE_FILENAME}.cpp")
 	endforeach()
 	
 	set_source_files_properties(${_REFLECTION_TARGET_SOURCES} PROPERTIES GENERATED true)

@@ -1,5 +1,7 @@
 #include "CodeGenerator.h"
 
+#include "ContextualException.h"
+
 #include <format>
 #include <cassert>
 #include <cctype>
@@ -19,7 +21,10 @@ CodeGenerator::CodeGenerator(ifc::File& file)
 
 void CodeGenerator::write_cpp_file(std::ostream& out)
 {
-	assert(file.header().unit.sort() == ifc::UnitSort::Primary); // For now
+	if (file.header().unit.sort() != ifc::UnitSort::Primary) // For now
+	{
+		throw CodeGenException("Currently the tool only supports primary module fragments (originating from a .ixx file from MSVC for example).");
+	}
 
 	auto unit_index = file.header().unit.index;
 	const auto module_name = file.get_string(ifc::TextOffset{ unit_index });
@@ -97,13 +102,14 @@ void CodeGenerator::render(std::string_view type_name, const ifc::ScopeDeclarati
 	auto var_name = to_snake_case(type_name) + '_';
 	auto scope_descriptor = file.scope_descriptors()[scope_decl.initializer];
 	auto [fields, methods] = render_members(type_name, var_name, scope_descriptor);
+	auto bases = render_bases(scope_decl);
 
 	code += std::format(R"(add_type({{ "{1}", get_id<{1}>(),
 	{{ {2} }},
 	{{ {3} }},
 	{{ {4} }}
 }});
-)", var_name, type_name, "", fields, methods);
+)", var_name, type_name, bases, fields, methods);
 }
 
 CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_name, std::string_view type_variable, ifc::ScopeDescriptor scope_desc)
@@ -146,12 +152,66 @@ CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_n
 	return { fields, methods };
 }
 
+std::string CodeGenerator::render_bases(const ifc::ScopeDeclaration& scope_decl)
+{
+	// Otherwise struct
+	const bool is_class = (ifc::get_kind(scope_decl, file) == ifc::TypeBasis::Class);
+	const auto default_access = (is_class ? "private" : "public");
+
+	auto base_index = scope_decl.base;
+	if (base_index.is_null())
+	{
+		return "";
+	}
+
+	const auto render_base = [this, default_access] (const ifc::BaseType& base_type) -> std::string
+	{
+		auto access_string = render_as_neat_access_enum(base_type.access, default_access);
+		auto type_name = render_full_typename(base_type.type);
+		return std::format(R"(BaseClass{{ get_id<{0}>(), {1} }}, )", type_name, access_string);
+	};
+
+	switch (base_index.sort())
+	{
+	case ifc::TypeSort::Base: 
+		return render_base(file.base_types()[base_index]);
+	case ifc::TypeSort::Tuple:
+		{
+			auto& tuple_type = file.tuple_types()[base_index];
+
+			std::string rendered;
+			rendered.reserve(ifc::raw_count(tuple_type.cardinality) * 16);
+
+			for (auto& type : file.type_heap().slice(tuple_type))
+			{
+				if (type.sort() == ifc::TypeSort::Base)
+				{
+					rendered += render_base(file.base_types()[type]);
+				}
+				else
+				{
+					assert(false && "unexpected base type");
+				}
+			}
+
+			return rendered;
+		}
+		break;
+	default:
+		// TODO: Throw exception
+		assert(false && "Unexpected base class type sort");
+		return "";
+	}
+}
+
 std::string CodeGenerator::render_full_typename(ifc::TypeIndex type_index)
 {
 	switch (type_index.sort())
 	{
 	case ifc::TypeSort::Fundamental:
 		return render_full_typename(file.fundamental_types()[type_index]);
+	case ifc::TypeSort::Designated:
+		return render_refered_declaration(file.designated_types()[type_index].decl);
 	case ifc::TypeSort::Pointer:
 		return render_full_typename(file.pointer_types()[type_index].pointee) + "*";
 	case ifc::TypeSort::LvalueReference:
@@ -295,6 +355,49 @@ std::string CodeGenerator::render_full_typename(const ifc::TupleType& types)
 	return rendered;
 }
 
+std::string CodeGenerator::render_refered_declaration(const ifc::DeclIndex& decl_index)
+{
+	switch (const auto kind = decl_index.sort())
+	{
+	case ifc::DeclSort::Parameter:
+	{
+		ifc::ParameterDeclaration const& param = file.parameters()[decl_index];
+		return file.get_string(param.name);
+	}
+	break;
+	case ifc::DeclSort::Scope:
+	{
+		ifc::ScopeDeclaration const& scope = get_scope(file, decl_index);
+		return std::string{ get_user_type_name(file, scope.name) };
+	}
+	break;
+	case ifc::DeclSort::Template:
+	{
+		ifc::TemplateDeclaration const& template_declaration = file.template_declarations()[decl_index];
+		return std::string{ get_user_type_name(file, template_declaration.name) };
+	}
+	break;
+	case ifc::DeclSort::Function:
+	{
+		ifc::FunctionDeclaration const& function = file.functions()[decl_index];
+		return std::string{ get_user_type_name(file, function.name) };
+	}
+	break;
+	//case ifc::DeclSort::Reference:
+	//	return std::string{ get_user_type_name(file, file.decl_references()[decl_index]) };
+	//	break;
+	case ifc::DeclSort::Enumeration:
+	{
+		auto const& enumeration = file.enumerations()[decl_index];
+		return file.get_string(enumeration.name);
+	}
+	break;
+	default:
+		assert(false && "Unsupported declsort");
+		return "Unsupported DeclSort '" + std::to_string(static_cast<int>(kind)) + "'";
+	}
+}
+
 std::string CodeGenerator::render(ifc::Qualifiers qualifiers)
 {
 	using namespace std::string_view_literals;
@@ -316,6 +419,20 @@ std::string CodeGenerator::render(ifc::Qualifiers qualifiers)
 	}
 
 	return rendered;
+}
+
+std::string CodeGenerator::render_as_neat_access_enum(ifc::Access access, std::string_view value_for_none)
+{
+	switch (access)
+	{
+	case ifc::Access::None: return std::string{ value_for_none };
+	case ifc::Access::Private: return "Neat::Access::Private";
+	case ifc::Access::Protected: return "Neat::Access::Protected";
+	case ifc::Access::Public: return "Neat::Access::Public";
+	}
+
+	throw CodeGenException("Invalid access value.", 
+		std::format("Expected 0 to 3 (inclusive). While {0} was given.", static_cast<uint8_t>(access)));
 }
 
 

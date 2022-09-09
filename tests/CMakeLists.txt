@@ -21,7 +21,7 @@ if((PROJECT_IS_NEAT_REFLECTION OR NEAT_REFLECTION_BUILD_TESTING) AND BUILD_TESTI
 
 
 	# Tests
-	add_library(NeatReflectionTests "TestModule1.ixx" "TestModule1.cpp")
+	add_library(NeatReflectionTests "TestModule1.ixx" "TestModule1.cpp" "Folder/TestModule2.ixx" "Folder/TestModule2.cpp")
 	target_compile_features(NeatReflectionTests PUBLIC cxx_std_20)
 	target_link_libraries(NeatReflectionTests PUBLIC NeatReflection)
 

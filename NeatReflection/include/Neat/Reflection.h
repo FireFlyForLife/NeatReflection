@@ -9,6 +9,7 @@
 #include <vector>
 #include <span>
 #include <cassert>
+#include <cstdint>
 
 // Forward Declarations
 namespace Neat
@@ -16,6 +17,7 @@ namespace Neat
 	struct Type;
 	struct Field;
 	struct Method;
+	struct BaseClass;
 }
 
 
@@ -36,16 +38,24 @@ namespace Neat
 	// Types
 	// ===========================================================================
 
-	struct REFL_API Type
+	enum class Access : uint8_t { Public, Protected, Private };
+
+	struct Type
 	{
 		std::string name;
 		TemplateTypeId id;
-		std::vector<TemplateTypeId> bases;
+		std::vector<BaseClass> bases;
 		std::vector<Field> fields;
 		std::vector<Method> methods;
 	};
 
-	struct REFL_API Field
+	struct BaseClass
+	{
+		TemplateTypeId base_id;
+		Access access;
+	};
+
+	struct Field
 	{
 		// Functions
 		template<typename TObject, typename TType, TType TObject::* PtrToMember>
@@ -64,7 +74,7 @@ namespace Neat
 		std::vector<std::string> attributes; // Unused currently
 	};
 
-	struct REFL_API Method
+	struct Method
 	{
 		// Functions
 		template<auto PtrToMemberFunction, typename TObject, typename TReturn, typename... TArgs>
