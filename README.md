@@ -9,9 +9,49 @@ After C++20 modules are compiled, they are stored in a Binary Module Interface (
 
 **Fast**: Utilizes existing compiler outputs (BMI files) to generate reflection information. Each file produces it's own C++ source file (with reflection info). Thus incremental builds will stay fast. 
 
-## Future tasks
- - [] Expose the Reflection library as a module instead of #include
- - [] IFC-reader library pulls in Boost just for memory mapping the file. This dependency should be removed
- - [] Add support for GCC (via .cmi) 
- - [] Clang (via clang's BMI solution)
- - [] User Attributes are not exposed in .ifc 
+## API Example
+```cpp
+export struct MyStruct {
+    int damage;
+
+    int get_42() { return 42; }
+};
+
+int main() {
+    MyStruct my_struct{ .damage = -5 };
+
+    Neat::Type* type = Neat::get_type<MyStruct>();
+
+    auto& field = type->fields[0];
+    assert(field.name == "damage");
+
+    auto old_damage = field.get_value(&my_struct);
+    auto old_damage_int = std::any_cast<int>(&value);
+    assert(old_damage_int != nullptr && *old_damage_int == -5);
+
+    field.set_value(&my_struct, 75);
+    assert(my_struct.damage == 75);
+
+    auto& method = type->methods[0];
+    assert(method.name == "get_42");
+
+    auto value = method.invoke(&my_struct, {});
+    auto value_int = std::any_cast<int>(&value);
+    assert(value_int != nullptr && *value_int == 42);
+}
+```
+
+## CMake integration
+Currently only CMake integration is builtin. But extending it to other build systems should be fairly trivial.
+ 
+Small CMake example:
+```cmake
+add_library(MyCode "MyModule.ixx" "MyModule.cpp")
+target_compile_features(MyCode PUBLIC cxx_std_20)
+target_link_libraries(MyCode PUBLIC NeatReflection)
+
+add_reflection_target(MyCode_ReflectionData MyCode)
+
+add_executable(MyExe PRIVATE "main.cpp")
+target_link_libraries(MyExe PRIVATE MyCode MyCode_ReflectionData)
+```
