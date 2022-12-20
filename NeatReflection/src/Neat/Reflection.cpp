@@ -20,7 +20,7 @@ namespace Neat
 	{
 		type_container.by_type_name[type.name] = type_container.types.size();
 		type_container.by_template_type_id[type.id] = type_container.types.size();
-		type_container.types.emplace_back(std::move(type));
+		type_container.types.push_back(std::move(type));
 		return type_container.types.back();
 	}
 

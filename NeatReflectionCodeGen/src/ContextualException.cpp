@@ -3,23 +3,23 @@
 #include <format>
 
 
-CodeGenException::CodeGenException(std::string message) 
+ContextualException::ContextualException(std::string message) 
 	: message(std::move(message))
 {
 }
 
-CodeGenException::CodeGenException(std::string message, std::string context)
+ContextualException::ContextualException(std::string message, std::string context)
 	: message(std::move(message))
 	, context({ std::move(context) })
 {
 }
 
-void CodeGenException::add_context(std::string context)
+void ContextualException::add_context(std::string context)
 {
 	this->context.push_back(std::move(context));
 }
 
-char const* CodeGenException::what() const
+char const* ContextualException::what() const
 {
 	std::string flattened_context;
 	for (auto context_entry : context)

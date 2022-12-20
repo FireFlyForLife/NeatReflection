@@ -9,13 +9,13 @@ import TestModule1;
 
 
 template<typename T>
-void test_contains_type()
+void test_contains_type(std::string_view type_name)
 {
 	using namespace std::string_view_literals;
 
-	Neat::Type* base_type_by_name = Neat::get_type("MyBaseStruct"sv);
-	Neat::Type* base_type_by_id = Neat::get_type(Neat::get_id<MyBaseStruct>());
-	Neat::Type* base_type_by_template = Neat::get_type<MyBaseStruct>();
+	Neat::Type* base_type_by_name = Neat::get_type(type_name);
+	Neat::Type* base_type_by_id = Neat::get_type(Neat::get_id<T>());
+	Neat::Type* base_type_by_template = Neat::get_type<T>();
 
 	CHECK(base_type_by_name != nullptr);
 	CHECK(base_type_by_id != nullptr);
@@ -27,8 +27,8 @@ void test_contains_type()
 
 TEST_CASE("Contains types")
 {
-	test_contains_type<MyBaseStruct>();
-	test_contains_type<MyStruct>();
+	test_contains_type<MyBaseStruct>("MyBaseStruct");
+	test_contains_type<MyStruct>("MyStruct");
 }
 
 // Attributes avoided, not supported yet

@@ -1,4 +1,6 @@
 #pragma once
+#include "Neat/Reflection.h"
+
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -24,7 +26,7 @@ private:
 
 	void render(std::string_view type_name, const ifc::ScopeDeclaration& scope_decl);
 	struct TypeMembers { std::string fields, methods; };
-	TypeMembers render_members(std::string_view object, std::string_view type_variable, ifc::ScopeDescriptor scope_desc);
+	TypeMembers render_members(std::string_view object, std::string_view type_variable, ifc::ScopeDescriptor scope_desc, bool reflect_private_members);
 	std::string render_bases(const ifc::ScopeDeclaration& scope_decl);
 	
 	std::string render_full_typename(ifc::TypeIndex type_index);
@@ -34,7 +36,11 @@ private:
 	std::string render_refered_declaration(const ifc::DeclIndex& decl_index);
 
 	std::string render(ifc::Qualifiers qualifiers);
+	std::string_view render(Neat::Access access);
 	std::string render_as_neat_access_enum(ifc::Access access, std::string_view value_for_none = "");
+	std::string render_neat_access_enum(Neat::Access access);
+
+	bool should_reflect_private_members(ifc::ScopeDescriptor scope_desc, Neat::Access default_access) const;
 
 private:
 	ifc::File& file;

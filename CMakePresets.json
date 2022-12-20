@@ -9,7 +9,11 @@
 				"installDir": "${sourceDir}/out/install/${presetName}",
 				"cacheVariables": {
 					"CMAKE_C_COMPILER": "cl.exe",
-					"CMAKE_CXX_COMPILER": "cl.exe"
+					"CMAKE_CXX_COMPILER": "cl.exe",
+					"CMAKE_TOOLCHAIN_FILE": "E:/Project/C++/vcpkg/scripts/buildsystems/vcpkg.cmake",
+					"CMAKE_MESSAGE_LOG_LEVEL": "DEBUG",
+					"NEAT_REFLECTION_USE_PREBUILT_CODEGEN_EXE": "OFF",
+					"NEAT_REFLECTION_BUILD_TESTING": "ON"
 				},
 				"condition": {
 					"type": "equals",

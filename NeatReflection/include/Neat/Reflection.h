@@ -1,12 +1,14 @@
 #pragma once
 #include "Neat/DllMacro.h"
 #include "Neat/TemplateTypeId.h"
+#include "Neat/ReflectPrivateMembers.h"
 
 #include <any>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <type_traits>
 #include <span>
 #include <cassert>
 #include <cstdint>
@@ -59,7 +61,7 @@ namespace Neat
 	{
 		// Functions
 		template<typename TObject, typename TType, TType TObject::* PtrToMember>
-		static Field create(std::string_view name);
+		static Field create(std::string_view name, Access access);
 
 		using GetValueFunction = std::any (*)(void* object);
 		using SetValueFunction = void (*)(void* object, std::any value);
@@ -72,13 +74,14 @@ namespace Neat
 		TemplateTypeId type;
 		std::string name;
 		std::vector<std::string> attributes; // Unused currently
+		Access access;
 	};
 
 	struct Method
 	{
 		// Functions
 		template<auto PtrToMemberFunction, typename TObject, typename TReturn, typename... TArgs>
-		static Method create(std::string_view name);
+		static Method create(std::string_view name, Access access);
 
 		using InvokeFunction = std::any (*)(void* object, std::span<std::any> arguments);
 		
@@ -90,6 +93,7 @@ namespace Neat
 		std::string name;
 		std::vector<TemplateTypeId> argument_types;
 		std::vector<std::string> attributes; // Unused currently
+		Access access;
 	};
 }
 
@@ -119,25 +123,20 @@ namespace Neat
 	}
 
 	template<typename TObject, typename TType, TType TObject::* PtrToMember>
-	Field Field::create(std::string_view name)
+	Field Field::create(std::string_view name, Access access)
 	{
 		return Field{
 			.get_value = &Detail::get_value_erased<TObject, TType, PtrToMember>,
 			.set_value = &Detail::set_value_erased<TObject, TType, PtrToMember>,
 			.object_type = get_id<TObject>(),
 			.type = get_id<TType>(),
-			.name = std::string{ name }
+			.name = std::string{ name },
+			.access = access
 		};
 	}
 
 	namespace Detail
 	{
-		template<typename T, typename E>
-		struct IsSame { constexpr static bool value = false; };
-
-		template<typename T>
-		struct IsSame<T, T> { constexpr static bool value = true; };
-
 		template<auto PtrToMemberFunction, typename TObject, typename TReturn, typename ...TArgs>
 		std::any invoke_erased(void* object, std::span<std::any> arguments)
 		{
@@ -160,9 +159,9 @@ namespace Neat
 	}
 
 	template<auto PtrToMemberFunction, typename TObject, typename TReturn, typename ...TArgs>
-	Method Method::create(std::string_view name)
+	Method Method::create(std::string_view name, Access access)
 	{
-		static_assert(Detail::IsSame<decltype(PtrToMemberFunction), TReturn (TObject::*)(TArgs...)>::value,
+		static_assert(std::is_same_v<decltype(PtrToMemberFunction), TReturn (TObject::*)(TArgs...)>,
 			"PtrToMemberFunction needs to be a value of type `TReturn (TObject::*)(TArgs...)`");
 
 		return Method{
@@ -170,7 +169,8 @@ namespace Neat
 			.object_type = get_id<TObject>(),
 			.return_type = get_id<TReturn>(),
 			.name = std::string{name},
-			.argument_types = {get_id<TArgs>()...}
+			.argument_types = {get_id<TArgs>()...},
+			.access = access
 		};
 	}
 }
