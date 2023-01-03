@@ -12,7 +12,7 @@ include(CTest)
 
 # User Options
 option(NEAT_REFLECTION_BUILD_TESTING			"Enable tests for NeatReflection" OFF)
-option(NEAT_REFLECTION_USE_PREBUILT_CODEGEN_EXE "Don't compile NeatReflectionCodeGen from source but use the prebuilt binary." ON)
+# option(NEAT_REFLECTION_USE_PREBUILT_CODEGEN_EXE "Don't compile NeatReflectionCodeGen from source but use the prebuilt binary." ON)
 
 
 # Sources

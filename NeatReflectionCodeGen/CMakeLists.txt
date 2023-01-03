@@ -1,9 +1,9 @@
-if(${NEAT_REFLECTION_USE_PREBUILT_CODEGEN_EXE})
-	
-	message(DEBUG "Using prebuilt NeatReflectionCodeGen.")
-	set(NEAT_REFLECTION_CODEGEN_EXE "${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/NeatReflectionCodeGen.exe" PARENT_SCOPE)
-
-else()
+# if(${NEAT_REFLECTION_USE_PREBUILT_CODEGEN_EXE})
+# 	
+# 	message(DEBUG "Using prebuilt NeatReflectionCodeGen.")
+# 	set(NEAT_REFLECTION_CODEGEN_EXE "${CMAKE_CURRENT_SOURCE_DIR}/prebuilt/NeatReflectionCodeGen.exe" PARENT_SCOPE)
+# 
+# else()
 
 	# Third party
 	FetchContent_Declare(
@@ -14,7 +14,7 @@ else()
 	FetchContent_Declare(
 		ifc-reader
 		GIT_REPOSITORY https://github.com/AndreyG/ifc-reader.git
-		GIT_TAG 9707de4669a467e503436db63da55f8f0bf8b712 # Latest at the time of writing
+		GIT_TAG ca1565ea2ca05c9ec2129dfd0549a81f826a7149 # Latest at the time of writing
 	)
 	FetchContent_Declare(
 		magic_enum
@@ -40,4 +40,4 @@ else()
 	message(DEBUG "Using NeatReflectionCodeGen built from source.")
 	set(NEAT_REFLECTION_CODEGEN_EXE "NeatReflectionCodeGen" PARENT_SCOPE)
 	
-endif()
+# endif()
