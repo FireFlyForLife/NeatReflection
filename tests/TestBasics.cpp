@@ -71,14 +71,74 @@ TEST_CASE("Types have correct data")
 
 		CHECK(type->name == "MyStruct");
 		CHECK(type->id == Neat::get_id<MyStruct>());
-		const std::vector type_expected_bases{ Neat::get_id<MyBaseStruct>() };
-		//CHECK(type->bases == type_expected_bases); // TODO: Fix bases
+		const std::vector<Neat::BaseClass> type_expected_bases{ { Neat::get_id<MyBaseStruct>(), Neat::Access::Public } };
+		CHECK(type->bases == type_expected_bases);
 		REQUIRE(type->fields.size() == 1);
 		check_field(type->fields[0], type->id, Neat::get_id<double>(), "damage");
 		REQUIRE(type->methods.size() == 3);
 		check_method(type->methods[0], type->id, Neat::get_id<void>(), "helper_function", {});
 		check_method(type->methods[1], type->id, Neat::get_id<void>(), "argumented_function", { Neat::get_id<int>(), Neat::get_id<int>() });
 		check_method(type->methods[2], type->id, Neat::get_id<int>(), "get_42", {});
+	}
+
+	SECTION("MyClass") {
+		Neat::Type* type = Neat::get_type<MyClass>();
+		REQUIRE(type != nullptr);
+
+		CHECK(type->name == "MyClass");
+		CHECK(type->id == Neat::get_id<MyClass>());
+		CHECK(type->bases.empty());
+		REQUIRE(type->fields.size() == 2);
+		check_field(type->fields[0], type->id, Neat::get_id<int>(), "i");
+		check_field(type->fields[1], type->id, Neat::get_id<double>(), "d");
+		REQUIRE(type->methods.size() == 1);
+		check_method(type->methods[0], type->id, Neat::get_id<void>(), "modify_d", {});
+	}
+
+	SECTION("NonExportedClass") {
+		Neat::Type* type = Neat::get_type("NonExportedClass");
+		CHECK(type == nullptr);
+	}
+
+	SECTION("ClassWithUnreflectedPrivates") {
+		Neat::Type* type = Neat::get_type<ClassWithUnreflectedPrivates>();
+		REQUIRE(type != nullptr);
+
+		CHECK(type->name == "ClassWithUnreflectedPrivates");
+		CHECK(type->id == Neat::get_id<ClassWithUnreflectedPrivates>());
+		CHECK(type->bases.empty());
+		CHECK(type->fields.empty());
+		CHECK(type->methods.empty());
+	}
+}
+
+TEST_CASE("Namespaced types have correct data")
+{
+	SECTION("ExportedNamespace::StillExportedClass") {
+		Neat::Type* type = Neat::get_type<ExportedNamespace::StillExportedClass>();
+		REQUIRE(type != nullptr);
+
+		CHECK(type->name == "ExportedNamespace::StillExportedClass");
+		CHECK(type->id == Neat::get_id<ExportedNamespace::StillExportedClass>());
+		CHECK(type->bases.empty());
+		CHECK(type->fields.empty());
+		CHECK(type->methods.empty());
+	}
+
+	SECTION("NormalNamespace::ExplicitlyExportedClass") {
+		Neat::Type* type = Neat::get_type<NormalNamespace::ExplicitlyExportedClass>();
+		REQUIRE(type != nullptr);
+
+		CHECK(type->name == "NormalNamespace::ExplicitlyExportedClass");
+		CHECK(type->id == Neat::get_id<NormalNamespace::ExplicitlyExportedClass>());
+		CHECK(type->bases.empty());
+		CHECK(type->fields.empty());
+		CHECK(type->methods.empty());
+	}
+
+	SECTION("NormalNamespace::NotExportedClass") {
+		Neat::Type* type = Neat::get_type("NormalNamespace::NotExportedClass");
+		CHECK(type == nullptr);
 	}
 }
 

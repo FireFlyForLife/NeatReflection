@@ -49,12 +49,16 @@ namespace Neat
 		std::vector<BaseClass> bases;
 		std::vector<Field> fields;
 		std::vector<Method> methods;
+
+		auto operator<=>(const Type& other) const noexcept = default;
 	};
 
 	struct BaseClass
 	{
 		TemplateTypeId base_id;
 		Access access;
+
+		auto operator<=>(const BaseClass& other) const noexcept = default;
 	};
 
 	struct Field
@@ -75,6 +79,9 @@ namespace Neat
 		std::string name;
 		std::vector<std::string> attributes; // Unused currently
 		Access access;
+
+		// Operators
+		auto operator<=>(const Field& other) const noexcept = default;
 	};
 
 	struct Method
@@ -94,6 +101,9 @@ namespace Neat
 		std::vector<TemplateTypeId> argument_types;
 		std::vector<std::string> attributes; // Unused currently
 		Access access;
+
+		// Operators
+		auto operator<=>(const Method& other) const noexcept = default;
 	};
 }
 

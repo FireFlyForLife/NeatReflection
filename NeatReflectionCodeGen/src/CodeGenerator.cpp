@@ -6,7 +6,6 @@
 #include <cassert>
 #include <cctype>
 #include <algorithm>
-
 #include <iostream>
 
 #include "ifc/Declaration.h"
@@ -14,6 +13,7 @@
 #include "ifc/Expression.h"
 #include "ifc/Type.h"
 #include "ifc/Name.h"
+#include "magic_enum.hpp"
 
 
 CodeGenerator::CodeGenerator(ifc::File& file)
@@ -65,7 +65,7 @@ namespace Neat
 	out.flush();
 }
 
-void CodeGenerator::scan(ifc::ScopeDescriptor scope_desc)
+void CodeGenerator::scan(ifc::Sequence scope_desc)
 {
 	auto declarations = ifc::get_declarations(file, scope_desc);
 	for (auto& declaration : declarations)
@@ -79,18 +79,20 @@ void CodeGenerator::scan(ifc::DeclIndex decl)
 	switch (decl.sort())
 	{
 	case ifc::DeclSort::Scope:
-		scan(ifc::get_scope(file, decl));
+		scan(ifc::get_scope(file, decl), decl);
 		break;
 	}
 }
 
-void CodeGenerator::scan(const ifc::ScopeDeclaration& scope_decl)
+void CodeGenerator::scan(const ifc::ScopeDeclaration& scope_decl, ifc::DeclIndex index)
 {
 	switch (ifc::get_kind(scope_decl, file))
 	{
 	case ifc::TypeBasis::Class:
 	case ifc::TypeBasis::Struct:
-		render(get_user_type_name(file, scope_decl.name), scope_decl);
+		{
+			render(scope_decl, index);
+		}
 		break;
 	case ifc::TypeBasis::Union:
 		// TODO: Implement at some point
@@ -101,21 +103,18 @@ void CodeGenerator::scan(const ifc::ScopeDeclaration& scope_decl)
 	}
 }
 
-void CodeGenerator::render(std::string_view type_name, const ifc::ScopeDeclaration& scope_decl)
+void CodeGenerator::render(const ifc::ScopeDeclaration& scope_decl, ifc::DeclIndex index)
 {
-	if ((uint8_t)scope_decl.specifiers & (uint8_t)ifc::BasicSpecifiers::NonExported)
+	if(!is_type_exported(index))
 	{
 		return;
 	}
 
-	const bool is_class = (ifc::get_kind(scope_decl, file) == ifc::TypeBasis::Class);
-	const auto default_access = (is_class ? Neat::Access::Private : Neat::Access::Public);
-
-	auto var_name = to_snake_case(type_name) + '_';
-	auto scope_descriptor = file.scope_descriptors()[scope_decl.initializer];
-	const bool reflect_privates = should_reflect_private_members(scope_descriptor, default_access);
-	auto [fields, methods] = render_members(type_name, var_name, scope_descriptor, reflect_privates);
-	auto bases = render_bases(scope_decl);
+	const auto type_name = render_namespace(index) + std::string{get_user_type_name(file, scope_decl.name)};
+	const auto var_name = to_snake_case(type_name) + '_';
+	const bool reflect_privates = reflects_private_members(index);
+	const auto [fields, methods] = render_members(type_name, var_name, scope_decl, reflect_privates);
+	const auto bases = render_bases(scope_decl);
 
 	code += std::format(R"(add_type({{ "{1}", get_id<{1}>(),
 	{{ {2} }},
@@ -125,12 +124,13 @@ void CodeGenerator::render(std::string_view type_name, const ifc::ScopeDeclarati
 )", var_name, type_name, bases, fields, methods);
 }
 
-CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_name, std::string_view type_variable, ifc::ScopeDescriptor scope_desc, bool reflect_private_members)
+CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_name, std::string_view type_variable, const ifc::ScopeDeclaration& scope_decl, bool reflect_private_members)
 {
 	std::string fields;
 	std::string methods;
 
-	auto declarations = ifc::get_declarations(file, scope_desc);
+	auto scope_descriptor = file.scope_descriptors()[scope_decl.initializer];
+	auto declarations = ifc::get_declarations(file, scope_descriptor);
 	for (auto& decl : declarations)
 	{
 		switch (decl.index.sort())
@@ -142,7 +142,7 @@ CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_n
 			const auto name = file.get_string(field.name);
 			const auto access = render_as_neat_access_enum(field.access, "Access::...");
 
-			if (field.access == ifc::Access::Public || reflect_private_members)
+			if (is_member_publicly_accessible(field, ifc::get_kind(scope_decl, file), reflect_private_members))
 			{
 				fields += std::format(R"(Field::create<{0}, {1}, &{0}::{2}>("{2}", {3}), )", type_name, type, name, access);
 			}
@@ -162,7 +162,7 @@ CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_n
 			const auto name = get_user_type_name(file, method.name);
 			const auto access = render_as_neat_access_enum(method.access);
 
-			if (method.access == ifc::Access::Public || reflect_private_members)
+			if (is_member_publicly_accessible(method, ifc::get_kind(scope_decl, file), reflect_private_members))
 			{
 				methods += std::format(R"(Method::create<&{0}::{3}, {0}, {1}{2}>("{3}", {4}), )", type_name, return_type, param_types, name, access);
 			}
@@ -232,7 +232,10 @@ std::string CodeGenerator::render_full_typename(ifc::TypeIndex type_index)
 	case ifc::TypeSort::Fundamental:
 		return render_full_typename(file.fundamental_types()[type_index]);
 	case ifc::TypeSort::Designated:
-		return render_refered_declaration(file.designated_types()[type_index].decl);
+		{
+			const auto& designated_type = file.designated_types()[type_index];
+			return render_namespace(designated_type.decl) + render_refered_declaration(designated_type.decl);
+		}
 	case ifc::TypeSort::Pointer:
 		return render_full_typename(file.pointer_types()[type_index].pointee) + "*";
 	case ifc::TypeSort::LvalueReference:
@@ -254,10 +257,20 @@ std::string CodeGenerator::render_full_typename(ifc::TypeIndex type_index)
 		return "PLACEHOLDER_TYPE";
 	case ifc::TypeSort::Tuple:
 		return render_full_typename(file.tuple_types()[type_index]);
+	case ifc::TypeSort::Function: // U (*)(Args...);
+		{
+			auto& function_type = file.function_types()[type_index];
+			auto return_type = render_full_typename(function_type.target);
+			std::string parameter_types;
+			if (!function_type.source.is_null()) {
+				parameter_types = render_full_typename(function_type.source);
+			}
+			return return_type + " (" + parameter_types + ")";
+		}
+		break;
 
 		// Currently unsupported
 	case ifc::TypeSort::Expansion: // variadic pack expansion (...)
-	case ifc::TypeSort::Function: // U (*)(Args...);
 	case ifc::TypeSort::PointerToMember: // U (T::*);
 	case ifc::TypeSort::Method: // U (T::*)(Args...);
 	// case ifc::TypeSort::Array: // T t[N]; Not implemented yet in ifc-reader
@@ -274,7 +287,7 @@ std::string CodeGenerator::render_full_typename(ifc::TypeIndex type_index)
 
 	default:
 		//assert(false && "Not supported yet");
-		return "UNSUPPORTED_TYPE_" + std::to_string((uint32_t)type_index.sort());
+		return std::format("<UNSUPPORTED_TYPE {}>", magic_enum::enum_name(type_index.sort()));
 	}
 }
 
@@ -317,8 +330,8 @@ std::string CodeGenerator::render_full_typename(const ifc::FundamentalType& type
 			return "char32_t";
 		}
 	case ifc::TypePrecision::Bit128:
-		rendered += std::format("Unsupported Bitness '{0}' ", 
-			static_cast<int>(type.precision));
+		rendered += std::format("<UNEXPECTED_BITNESS {}>", 
+			magic_enum::enum_name(type.precision));
 		break;
 	}
 
@@ -346,8 +359,8 @@ std::string CodeGenerator::render_full_typename(const ifc::FundamentalType& type
 		rendered += "double";
 		break;
 	default:
-		rendered += std::format("fundamental type ({0})", 
-			static_cast<int>(type.basis));
+		rendered += std::format("<UNEXPECTED_FUNCAMENTAL_TYPE {}>", 
+			magic_enum::enum_name(type.basis));
 		break;
 	}
 
@@ -401,6 +414,7 @@ std::string CodeGenerator::render_refered_declaration(const ifc::DeclIndex& decl
 	case ifc::DeclSort::Function:
 	{
 		ifc::FunctionDeclaration const& function = file.functions()[decl_index];
+		
 		return std::string{ get_user_type_name(file, function.name) };
 	}
 	break;
@@ -415,8 +429,93 @@ std::string CodeGenerator::render_refered_declaration(const ifc::DeclIndex& decl
 	break;
 	default:
 		assert(false && "Unsupported declsort");
-		return "Unsupported DeclSort '" + std::to_string(static_cast<int>(kind)) + "'";
+		return std::format("<UNEXPECTED_DECLSORT {}>", magic_enum::enum_name(kind));
 	}
+}
+
+std::string CodeGenerator::render_namespace(ifc::DeclIndex index)
+{
+	ifc::DeclIndex home_scope{};
+
+	switch (const auto sort = index.sort())
+	{
+        case ifc::DeclSort::Variable:
+			home_scope = file.variables()[index].home_scope;
+			break;
+        case ifc::DeclSort::Field:
+			home_scope = file.fields()[index].home_scope;
+			break;
+        case ifc::DeclSort::Scope:
+			home_scope = file.scope_declarations()[index].home_scope;
+			break;
+		case ifc::DeclSort::Intrinsic:
+			home_scope = file.intrinsic_declarations()[index].home_scope;
+			break;
+		case ifc::DeclSort::Enumeration:
+			home_scope = file.enumerations()[index].home_scope;
+			break;
+        case ifc::DeclSort::Alias:
+			home_scope = file.alias_declarations()[index].home_scope;
+			break;
+        case ifc::DeclSort::Template:
+			home_scope = file.template_declarations()[index].home_scope;
+			break;
+        case ifc::DeclSort::Concept:
+			home_scope = file.concepts()[index].home_scope;
+			break;
+        case ifc::DeclSort::Function:
+			home_scope = file.functions()[index].home_scope;
+			break;
+        case ifc::DeclSort::Method:
+			home_scope = file.methods()[index].home_scope;
+			break;
+        case ifc::DeclSort::Constructor:
+			home_scope = file.constructors()[index].home_scope;
+			break;
+        case ifc::DeclSort::Destructor:
+			home_scope = file.destructors()[index].home_scope;
+			break;
+		case ifc::DeclSort::UsingDeclaration:
+			home_scope = file.using_declarations()[index].home_scope;
+			break;
+
+			// Currently unsupported:
+		case ifc::DeclSort::Bitfield:
+		case ifc::DeclSort::PartialSpecialization:
+		case ifc::DeclSort::Reference: // Reference to an external module's declaration
+		case ifc::DeclSort::InheritedConstructor:
+
+			// Unable to get a home_scope for these:
+		case ifc::DeclSort::Parameter:
+		case ifc::DeclSort::VendorExtension:
+		case ifc::DeclSort::Enumerator:
+		case ifc::DeclSort::Temploid:
+		case ifc::DeclSort::ExplicitSpecialization:
+		case ifc::DeclSort::ExplicitInstantiation:
+		case ifc::DeclSort::UsingDirective:
+		case ifc::DeclSort::Friend:
+		case ifc::DeclSort::Expansion:
+		case ifc::DeclSort::DeductionGuide:
+		case ifc::DeclSort::Barren:
+		case ifc::DeclSort::Tuple:
+		case ifc::DeclSort::SyntaxTree:
+		case ifc::DeclSort::Property:
+        case ifc::DeclSort::OutputSegment:
+			throw ContextualException( std::format("Cannot get the home_scope for a decl sort of: {}", magic_enum::enum_name(index.sort())) );
+	}
+
+	if (home_scope.is_null()) {
+		return "";
+	}
+
+	// Recursive call
+	auto rendered_namespace = render_namespace(home_scope) + render_refered_declaration(home_scope);
+
+	if (rendered_namespace.empty()) {
+		return "";
+	}
+
+	return rendered_namespace + "::";
 }
 
 std::string CodeGenerator::render(ifc::Qualifiers qualifiers)
@@ -424,7 +523,7 @@ std::string CodeGenerator::render(ifc::Qualifiers qualifiers)
 	using namespace std::string_view_literals;
 
 	std::string rendered;
-	rendered.reserve("const"sv.size() + "volatile"sv.size());
+	rendered.reserve("const "sv.size() + "volatile "sv.size());
 	
 	if (ifc::has_qualifier(qualifiers, ifc::Qualifiers::Const))
 	{
@@ -469,27 +568,103 @@ std::string CodeGenerator::render_neat_access_enum(Neat::Access access)
 	}
 }
 
-bool CodeGenerator::should_reflect_private_members(ifc::ScopeDescriptor scope_desc, Neat::Access default_access) const
+bool CodeGenerator::reflects_private_members(ifc::DeclIndex index)
 {
-	std::cout << "should reflect?";
-	auto declarations = ifc::get_declarations(file, scope_desc);
-	for (auto& decl : declarations)
+	auto friends = file.trait_friendship_of_class(index);
+	for (auto friend_declaration : file.declarations().slice(friends))
 	{
-		if(decl.index.sort() == ifc::DeclSort::Friend)
+		assert(friend_declaration.index.sort() == ifc::DeclSort::Friend);
+		auto expr_index = file.friends()[friend_declaration.index].entity;
+		
+		switch (expr_index.sort())
 		{
-			const auto& friend_decl = file.friend_declarations()[decl.index];
-			if (friend_decl.entity.sort() == ifc::ExprSort::NamedDecl)
+		case ifc::ExprSort::NamedDecl:
 			{
-				std::cout << "is declsort " << (int)friend_decl.entity.sort() << '\n';
-				return true;
+				auto& named_decl = file.decl_expressions()[expr_index];
+
+				// TODO OPT: Don't require allocations for these comparisons.
+				auto friend_name = render_namespace(named_decl.resolution) + render_refered_declaration(named_decl.resolution);
+				auto rendered_type = render_full_typename(named_decl.type);
+				return friend_name == "Neat::reflect_private_members"
+					&& rendered_type == "void ()";
 			}
-			else {
-				std::cout << "different declsort " << (int)friend_decl.entity.sort() << '\n';
-			}
+		case ifc::ExprSort::TemplateId:
+			// Not supported yet
+
+		default:
+			std::cout << "Unexpected expr sort in friend declaration! " << magic_enum::enum_name(expr_index.sort()) << "\n";
+			break;
 		}
 	}
 
 	return false;
+}
+
+bool CodeGenerator::is_type_exported(ifc::TypeIndex type_index)
+{
+	switch (type_index.sort())
+	{
+	case ifc::TypeSort::Fundamental:
+		return true;
+	case ifc::TypeSort::Designated:
+		{
+			const auto& designated_type = file.designated_types()[type_index];
+			return is_type_exported(designated_type.decl);
+		}
+		break;
+	case ifc::TypeSort::Method:
+		{
+			const auto& method = file.method_types()[type_index];
+			return (is_type_exported(method.target) && (method.source.is_null() || is_type_exported(method.source)));
+		}
+		break;
+	case ifc::TypeSort::Tuple:
+		{
+			const auto& param_type_tuple = file.tuple_types()[type_index];
+			const auto param_types = file.type_heap().slice(param_type_tuple);
+			return std::all_of(param_types.begin(), param_types.end(), 
+				[this] (ifc::TypeIndex param) { return is_type_exported(param); });
+		}
+		break;
+	default:
+		throw ContextualException(std::format("Unexpected type while checking if the type was exported. type sort: {}",
+			magic_enum::enum_name(type_index.sort())));
+	}
+}
+
+bool CodeGenerator::is_type_exported(ifc::DeclIndex index)
+{
+	ifc::BasicSpecifiers specifiers{};
+
+	switch (index.sort())
+	{
+	case ifc::DeclSort::Scope:
+		specifiers = file.scope_declarations()[index].specifiers;
+		break;
+	case ifc::DeclSort::Enumeration:
+		specifiers = file.enumerations()[index].specifiers;
+		break;
+	default:
+		throw ContextualException(std::format("Unexpected declaration while checking if the type decl was exported. type decl sort: {}",
+			magic_enum::enum_name(index.sort())));
+	}
+
+	using namespace magic_enum::bitwise_operators;
+	return (magic_enum::enum_underlying(specifiers & ifc::BasicSpecifiers::NonExported) == 0);
+}
+
+std::optional<Neat::Access> convert(ifc::Access ifc_access)
+{
+	switch (ifc_access)
+	{
+	case ifc::Access::None: return std::nullopt;
+	case ifc::Access::Private: return Neat::Access::Private;
+	case ifc::Access::Protected: return Neat::Access::Protected;
+	case ifc::Access::Public: return Neat::Access::Public;
+	default:
+		throw ContextualException(std::format("Invalid value for ifc::Access. {} to {} (inclusive) was expected, but {} was given",
+			magic_enum::enum_underlying(ifc::Access::None), magic_enum::enum_underlying(ifc::Access::Public), magic_enum::enum_underlying(ifc_access)));
+	}
 }
 
 std::string_view get_user_type_name(const ifc::File& file, ifc::NameIndex name)

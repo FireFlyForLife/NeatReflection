@@ -4,11 +4,13 @@
 
 #include <iostream>
 #include <fstream>
-#include <map>
 #include <string>
 #include <filesystem>
+#include <span>
 
 #include "docopt.h"
+#include "mio/mmap.hpp"
+#include "ifc/File.h"
 #include "ifc/Environment.h"
 
 
@@ -21,6 +23,11 @@ class EmptyIfcEnvironment : public ifc::Environment
 public:
     EmptyIfcEnvironment() : Environment(Config{})
     {
+    }
+
+    ifc::File const& get_module_by_bmi_path(std::filesystem::path const&) override
+    {
+        throw ContextualException("The environment is empty");
     }
 };
 
@@ -39,8 +46,10 @@ bool convert_ifc_file(const std::string& ifc_filename, const std::string& cpp_fi
         return false;
     }
 
+    mio::mmap_source mmapped_file{ ifc_filename };
+    auto file_bytes = std::as_bytes(std::span{ mmapped_file.data(), mmapped_file.size() });
     EmptyIfcEnvironment empty_environment;
-    ifc::File ifc_file{ ifc_filename, &empty_environment };
+    ifc::File ifc_file{ file_bytes, &empty_environment };
 
     std::ofstream file_stream{ cpp_filename, std::ofstream::out | std::ofstream::trunc };
     if (!file_stream.good())
