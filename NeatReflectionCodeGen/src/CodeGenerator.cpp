@@ -243,8 +243,9 @@ std::string CodeGenerator::render_full_typename(ifc::TypeIndex type_index)
 	case ifc::TypeSort::RvalueReference:
 		return render_full_typename(file.rvalue_references()[type_index].referee) + "&&";
 	case ifc::TypeSort::Qualified:
-		return render_full_typename(file.qualified_types()[type_index].unqualified) +
-			render(file.qualified_types()[type_index].qualifiers);
+		return 
+			render(file.qualified_types()[type_index].qualifiers) +
+			render_full_typename(file.qualified_types()[type_index].unqualified);
 	case ifc::TypeSort::Base:
 		// render only the typename, no access modifiers or specifiers
 		return render_full_typename(file.base_types()[type_index].type);
@@ -626,6 +627,10 @@ bool CodeGenerator::is_type_exported(ifc::TypeIndex type_index)
 				[this] (ifc::TypeIndex param) { return is_type_exported(param); });
 		}
 		break;
+	case ifc::TypeSort::Pointer:
+	{
+		return true;
+	}
 	default:
 		throw ContextualException(std::format("Unexpected type while checking if the type was exported. type sort: {}",
 			magic_enum::enum_name(type_index.sort())));

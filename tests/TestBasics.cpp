@@ -75,10 +75,11 @@ TEST_CASE("Types have correct data")
 		CHECK(type->bases == type_expected_bases);
 		REQUIRE(type->fields.size() == 1);
 		check_field(type->fields[0], type->id, Neat::get_id<double>(), "damage");
-		REQUIRE(type->methods.size() == 3);
+		REQUIRE(type->methods.size() == 4);
 		check_method(type->methods[0], type->id, Neat::get_id<void>(), "helper_function", {});
 		check_method(type->methods[1], type->id, Neat::get_id<void>(), "argumented_function", { Neat::get_id<int>(), Neat::get_id<int>() });
 		check_method(type->methods[2], type->id, Neat::get_id<int>(), "get_42", {});
+		check_method(type->methods[3], type->id, Neat::get_id<const char*>(), "argumented_function2", { Neat::get_id<const char*>(), Neat::get_id<int>(), Neat::get_id<float>() });
 	}
 
 	SECTION("MyClass") {
@@ -225,7 +226,7 @@ TEST_CASE("Invoke method")
 	Neat::Type* type = Neat::get_type<MyStruct>();
 	REQUIRE(type != nullptr);
 
-	REQUIRE(type->methods.size() == 3);
+	REQUIRE(type->methods.size() == 4);
 	auto& method = type->methods[2];
 	REQUIRE(method.name == "get_42");
 
@@ -236,3 +237,23 @@ TEST_CASE("Invoke method")
 
 	REQUIRE(*value_int == 42);
 }
+
+TEST_CASE("Invoke method 2")
+{
+	MyStruct my_struct{ .damage = -5.0 };
+
+	Neat::Type* type = Neat::get_type<MyStruct>();
+	REQUIRE(type->methods.size() == 4);
+	auto& method = type->methods[3];
+	REQUIRE(method.name == "argumented_function2");
+	const char* prefix = "prefix";
+
+	std::array<std::any, 3> args = { std::any(prefix), std::any(6), std::any(2.345f) };
+
+	auto value = method.invoke(&my_struct, args);
+	REQUIRE(value.has_value());
+	const char* value_charptr = std::any_cast<const char*>(value);
+	REQUIRE(value_charptr != nullptr);
+	REQUIRE(std::string(value_charptr) == "prefix: 6 2.3");
+}
+

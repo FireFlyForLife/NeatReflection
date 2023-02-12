@@ -154,7 +154,9 @@ namespace Neat
 			// TODO: Validate arg types
 
 			TObject* object_ = reinterpret_cast<TObject*>(object);
-			auto arg_it = arguments.begin();
+
+			// here we use __cdecl call convention. Maybe add __stdcall call convention support later on.
+			auto arg_it = arguments.rbegin();
 
 			if constexpr (std::is_same_v<TReturn, void>)
 			{

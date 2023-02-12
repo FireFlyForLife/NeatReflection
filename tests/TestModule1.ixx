@@ -17,6 +17,7 @@ export struct MyStruct : MyBaseStruct
 	void helper_function();
 	void argumented_function(int i, int);
 	int get_42();
+	const char* argumented_function2(const char* prefix, int i, float f);
 };
 
 class NonExportedClass {};
