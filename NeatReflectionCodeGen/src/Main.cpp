@@ -42,7 +42,7 @@ constexpr auto USAGE = R"(Usage:
 
 bool convert_ifc_file(const std::string& ifc_filename, const std::string& cpp_filename) try
 {
-    ContextArea filename_context{ std::format("While loading ifc file: '{0}'.\nAnd preparing to output to: '{1}'", ifc_filename, cpp_filename) };
+    ContextArea filename_context{ std::format("While loading ifc file: '{0}'. And preparing to output to: '{1}'", ifc_filename, cpp_filename) };
 
     if (!std::filesystem::exists(ifc_filename))
     {
@@ -78,8 +78,14 @@ bool convert_ifc_file(const std::string& ifc_filename, const std::string& cpp_fi
 
     return true;
 }
+catch (ContextualException& e)
+{
+    std::cerr << "Error occured running NeatReflectionCodeGen, more info: \n\n" << e.what() << '\n';
+    return false;
+}
 catch (...)
 {
+    std::cerr << "Unknown exception has been raised from NeatReflectionCodeGen, exiting.\n";
     return false;
 }
 

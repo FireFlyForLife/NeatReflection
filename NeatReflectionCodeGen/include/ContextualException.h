@@ -11,16 +11,19 @@
 class ContextualException : public std::exception
 {
 public:
-	// Constructors
-	ContextualException() = default;
+	// Constructors & Deconstructors
+	ContextualException();
 	ContextualException(std::string message);
 	ContextualException(std::string message, std::string context);
+	~ContextualException();
 
-	// Modifiers
-	void add_context(std::string context);
+	ContextualException(const ContextualException&) = delete;
+	ContextualException(ContextualException&&) = default;
+	ContextualException& operator=(const ContextualException&) = delete;
+	ContextualException& operator=(ContextualException&&) = default;
 
 	// Accessors
-	[[nodiscard]] char const* what() const override; // Note: Not threadsafe
+	[[nodiscard]] char const* what() const noexcept override; // Note: Not threadsafe
 
 private:
 	std::string message;
@@ -50,11 +53,7 @@ private:
 
 namespace Detail
 {
-	template<typename... TArgs, size_t... Indices>
-	auto format_with_tuple_args(std::string_view fmt, std::tuple<TArgs...>& args, std::index_sequence<Indices...>)
-	{
-		return std::format(fmt, std::get<Indices>(args)...);
-	}
+	void context_area_add_context_current_thread(std::string&& context_point);
 }
 
 template<typename... TArgs>
@@ -77,19 +76,21 @@ ContextArea<TArgs...>::~ContextArea()
 {
 	if (std::uncaught_exceptions() > 0) [[unlikely]]
 	{
-		try {
-			std::rethrow_exception(std::current_exception());
+		std::string formatted_context;
+
+		if constexpr (sizeof...(TArgs) == 0)
+		{
+			formatted_context = std::string{ context_fmt };
 		}
-		catch (ContextualException& exception) {
-			if constexpr (sizeof...(TArgs) == 0)
+		else 
+		{
+			auto format_with_tuple = []<typename... TArgs, size_t... I>(std::string_view fmt, std::tuple<TArgs...>&args, std::index_sequence<I...>)
 			{
-				exception.add_context(std::string{ context_fmt });
-			}
-			else
-			{
-				auto context = Detail::format_with_tuple_args(context_fmt, args, std::make_index_sequence<sizeof...(TArgs)>{});
-				exception.add_context(std::move(context));
-			}
+				return std::format(fmt, std::get<I>(args)...);
+			};
+			formatted_context = format_with_tuple(context_fmt, args, std::index_sequence_for<TArgs...>{});
 		}
+		
+		Detail::context_area_add_context_current_thread(std::move(formatted_context));
 	}
 }
