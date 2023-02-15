@@ -13,8 +13,8 @@
 	)
 	FetchContent_Declare(
 		ifc-reader
-		GIT_REPOSITORY https://github.com/AndreyG/ifc-reader.git
-		GIT_TAG ca1565ea2ca05c9ec2129dfd0549a81f826a7149 # Latest at the time of writing
+		GIT_REPOSITORY https://github.com/FireFlyForLife/ifc-reader.git
+		GIT_TAG dbbb95fa67fa86de8ce62077db78c32e6a34e425 # Latest at the time of writing
 	)
 	FetchContent_Declare(
 		magic_enum

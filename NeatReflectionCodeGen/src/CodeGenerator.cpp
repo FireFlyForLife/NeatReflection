@@ -201,9 +201,9 @@ std::string CodeGenerator::render_bases(const ifc::ScopeDeclaration& scope_decl)
 			auto& tuple_type = file.tuple_types()[base_index];
 
 			std::string rendered;
-			rendered.reserve(ifc::raw_count(tuple_type.cardinality) * 16);
+			rendered.reserve(ifc::raw_count(tuple_type.seq.cardinality) * 16);
 
-			for (auto& type : file.type_heap().slice(tuple_type))
+			for (auto& type : file.type_heap().slice(tuple_type.seq))
 			{
 				if (type.sort() == ifc::TypeSort::Base)
 				{
@@ -376,10 +376,10 @@ std::string CodeGenerator::render_full_typename(const ifc::FundamentalType& type
 std::string CodeGenerator::render_full_typename(const ifc::TupleType& types)
 {
 	std::string rendered;
-	rendered.reserve(ifc::raw_count(types.cardinality) * 8); // Preallocate a reasonable amount
+	rendered.reserve(ifc::raw_count(types.seq.cardinality) * 8); // Preallocate a reasonable amount
 
 	bool first = true;
-	for (auto& type : file.type_heap().slice(types))
+	for (auto& type : file.type_heap().slice(types.seq))
 	{
 		if (!first)
 		{
@@ -693,7 +693,7 @@ bool CodeGenerator::is_type_exported(ifc::TypeIndex type_index)
 	case ifc::TypeSort::Tuple:
 		{
 			const auto& param_type_tuple = file.tuple_types()[type_index];
-			const auto param_types = file.type_heap().slice(param_type_tuple);
+			const auto param_types = file.type_heap().slice(param_type_tuple.seq);
 			return std::all_of(param_types.begin(), param_types.end(), 
 				[this] (ifc::TypeIndex param) { return is_type_exported(param); });
 		}
