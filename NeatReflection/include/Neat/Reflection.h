@@ -33,7 +33,7 @@ namespace Neat
 	REFL_API std::span<Type> get_types();
 	REFL_API Type* get_type(std::string_view type_name);
 	REFL_API Type* get_type(TemplateTypeId type_id);
-	template<typename T>
+	template<typename T> 
 	Type* get_type() { return get_type(get_id<T>()); }
 
 
@@ -44,20 +44,24 @@ namespace Neat
 
 	struct Type
 	{
+		// Data
 		std::string name;
 		TemplateTypeId id;
 		std::vector<BaseClass> bases;
 		std::vector<Field> fields;
 		std::vector<Method> methods;
 
+		// Operators
 		auto operator<=>(const Type& other) const noexcept = default;
 	};
 
 	struct BaseClass
 	{
+		// Data
 		TemplateTypeId base_id;
 		Access access;
 
+		// Operators
 		auto operator<=>(const BaseClass& other) const noexcept = default;
 	};
 
@@ -153,17 +157,21 @@ namespace Neat
 			assert(arguments.size() == sizeof...(TArgs));
 			// TODO: Validate arg types
 
+			auto unwrap_arguments_and_invoke = []<size_t... I>(TObject* t_object, std::span<std::any> arguments, std::index_sequence<I...>)
+			{
+				return (t_object->*PtrToMemberFunction)(std::any_cast<TArgs>(arguments[I])...);
+			};
+			
 			TObject* object_ = reinterpret_cast<TObject*>(object);
-			auto arg_it = arguments.begin();
 
 			if constexpr (std::is_same_v<TReturn, void>)
 			{
-				(object_->*PtrToMemberFunction)(std::any_cast<TArgs>(*(arg_it++))...);
+				unwrap_arguments_and_invoke(object_, arguments, std::index_sequence_for<TArgs...>{});
 				return {};
 			}
 			else
 			{
-				return { (object_->*PtrToMemberFunction)(std::any_cast<TArgs>(*(arg_it++))...) };
+				return unwrap_arguments_and_invoke(object_, arguments, std::index_sequence_for<TArgs...>{});
 			}
 		}
 	}
