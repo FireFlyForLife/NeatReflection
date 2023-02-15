@@ -1,5 +1,6 @@
 module;
 #include "Neat/ReflectPrivateMembers.h"
+#include <string>
 export module TestModule1;
 
 export void MyFunc();
@@ -15,7 +16,7 @@ export struct MyStruct : MyBaseStruct
 	double damage;
 
 	void helper_function();
-	void argumented_function(int i, int);
+	void argumented_function(int i, int j);
 	int get_42();
 };
 
@@ -38,6 +39,18 @@ private:
 	double d;
 
 	REFLECT_PRIVATE_MEMBERS;
+};
+
+export class MethodTester
+{
+public:
+	std::string test_method_2_args;
+	void TestMethod2(int i, int j);
+
+	constexpr static int test_method_return_value = 50;
+	int TestMethodReturn();
+	//constexpr static int test_method_const_return_value = 50;
+	//int TestMethodConstReturn() const;
 };
 
 export class ClassWithUnreflectedPrivates

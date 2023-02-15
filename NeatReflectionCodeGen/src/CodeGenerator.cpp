@@ -268,6 +268,12 @@ std::string CodeGenerator::render_full_typename(ifc::TypeIndex type_index)
 			return return_type + " (" + parameter_types + ")";
 		}
 		break;
+	case ifc::TypeSort::Syntactic:
+		{
+			auto& syntactic = file.syntactic_types()[type_index];
+			return render_full_typename(syntactic.expr);
+		}
+		break;
 
 		// Currently unsupported
 	case ifc::TypeSort::Expansion: // variadic pack expansion (...)
@@ -282,7 +288,6 @@ std::string CodeGenerator::render_full_typename(ifc::TypeIndex type_index)
 		// Not planned to be supported
 	case ifc::TypeSort::VendorExtension:
 	case ifc::TypeSort::Tor: // Compiler generated constructor
-	case ifc::TypeSort::Syntactic: // type expressed at the C++ source-level as a type-id. Typical examples include a template - id designating a specialization.
 	case ifc::TypeSort::SyntaxTree: // General parse tree representation. Seems to complicated to support
 
 	default:
@@ -388,6 +393,73 @@ std::string CodeGenerator::render_full_typename(const ifc::TupleType& types)
 
 	return rendered;
 }
+
+std::string CodeGenerator::render_full_typename(ifc::ExprIndex expr_index)
+{
+	switch (expr_index.sort())
+	{
+	case ifc::ExprSort::NamedDecl:
+		{
+			auto& named_decl = file.decl_expressions()[expr_index];
+			return render_full_typename(named_decl.resolution);
+		}
+		break;
+	case ifc::ExprSort::Type:
+		{
+			auto type_expr = file.type_expressions()[expr_index];
+			return render_full_typename(type_expr.denotation);
+		}
+		break;
+	case ifc::ExprSort::TemplateId:
+		{
+			auto& template_id = file.template_ids()[expr_index];
+			return std::format("{}<{}>", 
+				render_full_typename(template_id.primary),
+				render_full_typename(template_id.arguments));
+		}
+		break;
+	case ifc::ExprSort::Tuple:
+		{
+			auto& tuple_expr = file.tuple_expressions()[expr_index];
+			return render_full_typename(tuple_expr);
+		}
+	break;
+	case ifc::ExprSort::Empty:
+		return "";
+
+		// This function is only for rendering a typename, most expression sorts are not used for that so will be ignored:
+	default:
+		throw ContextualException(std::format("Unexpected expression while rendering typename. ExprSort is: {}",
+			magic_enum::enum_name(expr_index.sort())));
+	}
+}
+
+std::string CodeGenerator::render_full_typename(const ifc::TupleExpression& expressions)
+{
+	std::string rendered;
+	rendered.reserve(ifc::raw_count(expressions.seq.cardinality) * 8); // Preallocate a reasonable amount
+
+	bool first = true;
+	for (auto& expression : file.expr_heap().slice(expressions.seq))
+	{
+		if (!first)
+		{
+			rendered += ", ";
+		}
+
+		rendered += render_full_typename(expression);
+
+		first = false;
+	}
+
+	return rendered;
+}
+
+std::string CodeGenerator::render_full_typename(ifc::DeclIndex decl_index)
+{
+	return render_namespace(decl_index) + render_refered_declaration(decl_index);
+}
+
 
 std::string CodeGenerator::render_refered_declaration(const ifc::DeclIndex& decl_index)
 {
@@ -626,6 +698,11 @@ bool CodeGenerator::is_type_exported(ifc::TypeIndex type_index)
 				[this] (ifc::TypeIndex param) { return is_type_exported(param); });
 		}
 		break;
+	case ifc::TypeSort::Syntactic:
+		{
+			const auto& syntactic = file.syntactic_types()[type_index];
+			return is_type_exported(syntactic.expr);
+		}
 	default:
 		throw ContextualException(std::format("Unexpected type while checking if the type was exported. type sort: {}",
 			magic_enum::enum_name(type_index.sort())));
@@ -644,6 +721,9 @@ bool CodeGenerator::is_type_exported(ifc::DeclIndex index)
 	case ifc::DeclSort::Enumeration:
 		specifiers = file.enumerations()[index].specifiers;
 		break;
+	case ifc::DeclSort::Template:
+		specifiers = file.template_declarations()[index].specifiers;
+		break;
 	default:
 		throw ContextualException(std::format("Unexpected declaration while checking if the type decl was exported. type decl sort: {}",
 			magic_enum::enum_name(index.sort())));
@@ -651,6 +731,61 @@ bool CodeGenerator::is_type_exported(ifc::DeclIndex index)
 
 	using namespace magic_enum::bitwise_operators;
 	return (magic_enum::enum_underlying(specifiers & ifc::BasicSpecifiers::NonExported) == 0);
+}
+
+bool CodeGenerator::is_type_exported(ifc::ExprIndex index)
+{
+	switch (index.sort())
+	{
+	case ifc::ExprSort::NamedDecl:
+		{
+			auto& expr_named_decl = file.decl_expressions()[index];
+			return is_type_exported(expr_named_decl.resolution);
+		}
+		break;
+	case ifc::ExprSort::Type:
+		{
+			auto& expr_type = file.type_expressions()[index];
+			return is_type_exported(expr_type.denotation);
+		}
+		break;
+	case ifc::ExprSort::TemplateId:
+		{
+			auto& template_id = file.template_ids()[index];
+			return is_type_exported(template_id.primary) && is_type_exported(template_id.arguments);
+		}
+	case ifc::ExprSort::Tuple:
+		{
+			auto& expr_tuple = file.tuple_expressions()[index];
+			return is_type_exported(expr_tuple);
+		}
+		break;
+	case ifc::ExprSort::Empty:
+		return false;
+
+		// Not supported currently, will need more investigation.
+	case ifc::ExprSort::Lambda:
+	case ifc::ExprSort::UnresolvedId:
+	case ifc::ExprSort::SimpleIdentifier:
+
+	case ifc::ExprSort::UnqualifiedId:
+	case ifc::ExprSort::QualifiedName:
+	case ifc::ExprSort::Path:
+
+		// The rest is not supported, these expressions are for internals similar to a syntax tree.
+	default:
+		throw ContextualException(std::format("Unexpected expression while checking if the type can be exported. ExprSort is: {}",
+			magic_enum::enum_name(index.sort())));
+	}
+}
+
+bool CodeGenerator::is_type_exported(const ifc::TupleExpression& tuple_expression)
+{
+	auto expressions = file.expr_heap().slice(tuple_expression.seq);
+	return std::all_of(expressions.begin(), expressions.end(), [this](ifc::ExprIndex index)
+		{
+			return is_type_exported(index);
+		});
 }
 
 std::optional<Neat::Access> convert(ifc::Access ifc_access)

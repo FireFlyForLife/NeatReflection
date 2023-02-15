@@ -11,6 +11,7 @@
 #include "ifc/NameFwd.h"
 #include "ifc/Scope.h"
 #include "ifc/TypeFwd.h"
+#include "ifc/ExpressionFwd.h"
 
 
 class CodeGenerator
@@ -33,6 +34,9 @@ private:
 	std::string render_full_typename(ifc::TypeIndex type_index);
 	std::string render_full_typename(const ifc::FundamentalType& type);
 	std::string render_full_typename(const ifc::TupleType& types);
+	std::string render_full_typename(ifc::ExprIndex expr_index);
+	std::string render_full_typename(const ifc::TupleExpression& expressions);
+	std::string render_full_typename(ifc::DeclIndex decl_index);
 
 	std::string render_refered_declaration(const ifc::DeclIndex& decl_index);
 
@@ -49,6 +53,8 @@ private:
 	bool reflects_private_members(ifc::DeclIndex type_decl_index);
 	bool is_type_exported(ifc::TypeIndex);
 	bool is_type_exported(ifc::DeclIndex);
+	bool is_type_exported(ifc::ExprIndex);
+	bool is_type_exported(const ifc::TupleExpression&);
 
 private:
 	ifc::File& file;

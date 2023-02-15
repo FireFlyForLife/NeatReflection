@@ -27,7 +27,7 @@ if((PROJECT_IS_NEAT_REFLECTION OR NEAT_REFLECTION_BUILD_TESTING) AND BUILD_TESTI
 
 	add_reflection_target(NeatReflectionTests_ReflectionData NeatReflectionTests)
 
-	add_executable(NeatReflectionTestsExe "TestBasics.cpp")
+	add_executable(NeatReflectionTestsExe "TestBasics.cpp" "TestMethods.cpp")
 	target_compile_features(NeatReflectionTestsExe PUBLIC cxx_std_20)
 	target_link_libraries(NeatReflectionTestsExe PUBLIC NeatReflectionTests NeatReflectionTests_ReflectionData)
 	target_link_libraries(NeatReflectionTestsExe PRIVATE Catch2::Catch2WithMain)

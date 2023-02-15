@@ -1,11 +1,12 @@
 ## Future tasks
  - [ ] Add examples
  - [ ] Expose the Reflection library as a module instead of #include
- - [ ] IFC-reader library pulls in Boost just for memory mapping the file. This dependency should be removed
+ - [x] IFC-reader library pulls in Boost just for memory mapping the file. This dependency should be removed
  - [ ] Add prebuilt binary to the code generator, so it builds much quicker for everyone
  - [ ] Add support for GCC (via .cmi) 
  - [ ] Clang (via clang's BMI solution)
  - [ ] User Attributes are not exposed in .ifc 
  - [ ] Support more build systems
- - [ ] Let the code generator deal with private things through a "friend" mechanism
- - [ ] Let the code generator ignore things which are not publicly exported in the module
+ - [x] Let the code generator deal with private things through a "friend" mechanism
+ - [x] Let the code generator ignore things which are not publicly exported in the module
+ - [ ] Investigate forward declaring types which are not exported (so pointers and refers can still be reflected).
