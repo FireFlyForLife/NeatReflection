@@ -25,8 +25,8 @@ int main() {
     auto& field = type->fields[0];
     assert(field.name == "damage");
 
-    auto old_damage = field.get_value(&my_struct);
-    auto old_damage_int = std::any_cast<int>(&value);
+    auto damage = field.get_value(&my_struct);
+    auto damage_int = std::any_cast<int>(&damage);
     assert(old_damage_int != nullptr && *old_damage_int == -5);
 
     field.set_value(&my_struct, 75);
