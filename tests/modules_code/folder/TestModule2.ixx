@@ -7,6 +7,7 @@ export struct MyBaseStruct2 { int health; };
 export struct MyStruct2 : MyBaseStruct2
 {
 	double damage;
+	unsigned int speed;
 
 	void helper_function();
 	void argumented_function(int i, int);

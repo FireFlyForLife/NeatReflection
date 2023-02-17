@@ -15,11 +15,6 @@ option(NEAT_REFLECTION_BUILD_TESTING			"Enable tests for NeatReflection" OFF)
 # option(NEAT_REFLECTION_USE_PREBUILT_CODEGEN_EXE "Don't compile NeatReflectionCodeGen from source but use the prebuilt binary." ON)
 
 
-# Sources
-add_subdirectory(NeatReflection) # Library
-add_subdirectory(NeatReflectionCodeGen) # Executable tool 
-
-
 # Public CMake Functions
 
 # Create a new CMake target named `reflection_data_target_name`, which will contain reflection data from target `target_name`
@@ -42,14 +37,28 @@ function(add_reflection_target reflection_data_target_name target_name)
 	set_source_files_properties(${_REFLECTION_TARGET_SOURCES} PROPERTIES GENERATED true)
 
 	add_library(${reflection_data_target_name} OBJECT ${_REFLECTION_TARGET_SOURCES})
-	add_custom_command(TARGET ${target_name} 
-		POST_BUILD COMMAND NeatReflectionCodeGen ARGS "scan" "${_TARGET__NAME}.dir/Debug/" "."
-		WORKING_DIRECTORY "${_TARGET__BINARY_DIR}")
+	add_custom_command(OUTPUT ${_REFLECTION_TARGET_SOURCES}
+		COMMAND ${NEAT_REFLECTION_CODEGEN_EXE} ARGS "scan" "${_TARGET__NAME}.dir/Debug/" "."
+		WORKING_DIRECTORY "${_TARGET__BINARY_DIR}"
+		DEPENDS ${_TARGET__SOURCES})
 	target_link_libraries(${reflection_data_target_name} PRIVATE NeatReflection ${target_name})
 	target_compile_features(${reflection_data_target_name} PUBLIC cxx_std_20)
 
 endfunction()
 
 
-# Testing
-add_subdirectory(tests) # Tests
+# Sources
+add_library (NeatReflection
+	"include/Neat/Reflection.h"
+	"include/Neat/TemplateTypeId.h"
+	"include/Neat/DllMacro.h" 
+	"include/Neat/ReflectPrivateMembers.h"
+	"src/Neat/Reflection.cpp"
+	"src/Neat/TemplateTypeId.cpp")
+target_compile_features(NeatReflection PUBLIC cxx_std_20)
+target_include_directories(NeatReflection PUBLIC "include")
+target_compile_definitions(NeatReflection PRIVATE BUILDING_REFLECTIONLIB=1) # TODO: Set DLL_REFLECTIONLIB when built as DLL
+
+add_subdirectory(tools/neat_code_gen)
+
+add_subdirectory(tests)

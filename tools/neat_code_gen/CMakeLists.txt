@@ -32,9 +32,9 @@
 
 
 	# Executable
-	add_executable(NeatReflectionCodeGen "src/Main.cpp" "include/CodeGenerator.h" "src/CodeGenerator.cpp" "include/ContextualException.h" "src/ContextualException.cpp")
+	add_executable(NeatReflectionCodeGen "src/Main.cpp" "src/CodeGenerator.h" "src/CodeGenerator.cpp" "src/ContextualException.h" "src/ContextualException.cpp")
 	target_compile_features(NeatReflectionCodeGen PUBLIC cxx_std_20)
-	target_include_directories(NeatReflectionCodeGen PUBLIC "include")
+	target_include_directories(NeatReflectionCodeGen PRIVATE "src")
 	target_link_libraries(NeatReflectionCodeGen PUBLIC NeatReflection docopt_s ifc-core magic_enum mio)
 
 	message(DEBUG "Using NeatReflectionCodeGen built from source.")

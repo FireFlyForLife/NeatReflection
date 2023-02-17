@@ -21,16 +21,16 @@ if((PROJECT_IS_NEAT_REFLECTION OR NEAT_REFLECTION_BUILD_TESTING) AND BUILD_TESTI
 
 
 	# Tests
-	add_library(NeatReflectionTests "TestModule1.ixx" "TestModule1.cpp" "Folder/TestModule2.ixx" "Folder/TestModule2.cpp")
-	target_compile_features(NeatReflectionTests PUBLIC cxx_std_20)
-	target_link_libraries(NeatReflectionTests PUBLIC NeatReflection)
+	add_library(NeatReflectionTestingTypes "modules_code/TestModule1.ixx" "modules_code/TestModule1.cpp" "modules_code/folder/TestModule2.ixx" "modules_code/folder/TestModule2.cpp")
+	target_compile_features(NeatReflectionTestingTypes PUBLIC cxx_std_20)
+	target_link_libraries(NeatReflectionTestingTypes PUBLIC NeatReflection)
 
-	add_reflection_target(NeatReflectionTests_ReflectionData NeatReflectionTests)
+	add_reflection_target(NeatReflectionTestingTypes_ReflectionData NeatReflectionTestingTypes)
 
-	add_executable(NeatReflectionTestsExe "TestBasics.cpp" "TestMethods.cpp")
-	target_compile_features(NeatReflectionTestsExe PUBLIC cxx_std_20)
-	target_link_libraries(NeatReflectionTestsExe PUBLIC NeatReflectionTests NeatReflectionTests_ReflectionData)
-	target_link_libraries(NeatReflectionTestsExe PRIVATE Catch2::Catch2WithMain)
+	add_executable(NeatReflectionTestRunner "test_runner/TestBasics.cpp" "test_runner/TestMethods.cpp")
+	target_compile_features(NeatReflectionTestRunner PUBLIC cxx_std_20)
+	target_link_libraries(NeatReflectionTestRunner PUBLIC NeatReflectionTestingTypes NeatReflectionTestingTypes_ReflectionData)
+	target_link_libraries(NeatReflectionTestRunner PRIVATE Catch2::Catch2WithMain)
 
-	catch_discover_tests(NeatReflectionTestsExe)
+	catch_discover_tests(NeatReflectionTestRunner)
 endif()
