@@ -27,7 +27,7 @@
 		GIT_TAG 3f86a95c0784d73ce6815237ec33ed25f233b643 # Latest at the time or writing
 	)
 
-	message(STATUS "Fetching third party code gen dependencies with FetchContent_MakeAvailable. This might take a few minutes...")
+	message(STATUS "[NeatReflection] Fetching third party code gen dependencies with FetchContent_MakeAvailable. This might take a few minutes...")
 	FetchContent_MakeAvailable(docopt ifc-reader magic_enum mio)
 
 
@@ -37,7 +37,7 @@
 	target_include_directories(NeatReflectionCodeGen PRIVATE "src")
 	target_link_libraries(NeatReflectionCodeGen PUBLIC NeatReflection docopt_s ifc-core magic_enum mio)
 
-	message(DEBUG "Using NeatReflectionCodeGen built from source.")
+	message(DEBUG "[NeatReflection] Using NeatReflectionCodeGen built from source.")
 	set(NEAT_REFLECTION_CODEGEN_EXE "NeatReflectionCodeGen" PARENT_SCOPE)
 	
 # endif()

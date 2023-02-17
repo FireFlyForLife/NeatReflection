@@ -1,6 +1,6 @@
 set(PROJECT_IS_NEAT_REFLECTION CMAKE_PROJECT_NAME STREQUAL "NeatReflection")
 if((PROJECT_IS_NEAT_REFLECTION OR NEAT_REFLECTION_BUILD_TESTING) AND BUILD_TESTING)
-	message(STATUS "Configuring NeatReflection tests...")
+	message(STATUS "[NeatReflection] Configuring NeatReflection tests...")
 
 
 	# Third party
@@ -10,7 +10,7 @@ if((PROJECT_IS_NEAT_REFLECTION OR NEAT_REFLECTION_BUILD_TESTING) AND BUILD_TESTI
 		GIT_TAG v3.0.1
 	)
 
-	message(STATUS "Fetching third party test dependencies with FetchContent_MakeAvailable. This might take a few minutes...")
+	message(STATUS "[NeatReflection] Fetching third party test dependencies with FetchContent_MakeAvailable. This might take a few minutes...")
 	FetchContent_MakeAvailable(Catch2)
 
 	list(APPEND CMAKE_MODULE_PATH "${catch2_SOURCE_DIR}/extras") # Add catch2's `extra` folder to CMake module includes
