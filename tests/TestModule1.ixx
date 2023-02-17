@@ -49,8 +49,8 @@ public:
 
 	constexpr static int test_method_return_value = 50;
 	int TestMethodReturn();
-	//constexpr static int test_method_const_return_value = 50;
-	//int TestMethodConstReturn() const;
+	constexpr static int test_method_const_return_value = 51;
+	int TestMethodConstReturn() const;
 };
 
 export class ClassWithUnreflectedPrivates

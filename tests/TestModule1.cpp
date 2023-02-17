@@ -36,7 +36,7 @@ int MethodTester::TestMethodReturn()
 	return test_method_return_value;
 }
 
-//int MethodTester::TestMethodConstReturn() const
-//{
-//	return test_method_const_return_value;
-//}
+int MethodTester::TestMethodConstReturn() const
+{
+	return test_method_const_return_value;
+}

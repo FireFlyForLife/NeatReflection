@@ -179,8 +179,10 @@ namespace Neat
 	template<auto PtrToMemberFunction, typename TObject, typename TReturn, typename ...TArgs>
 	Method Method::create(std::string_view name, Access access)
 	{
-		static_assert(std::is_same_v<decltype(PtrToMemberFunction), TReturn (TObject::*)(TArgs...)>,
-			"PtrToMemberFunction needs to be a value of type `TReturn (TObject::*)(TArgs...)`");
+		static_assert(
+			std::is_same_v<decltype(PtrToMemberFunction), TReturn (TObject::*)(TArgs...)>
+			|| std::is_same_v<decltype(PtrToMemberFunction), TReturn(TObject::*)(TArgs...) const>,
+			"PtrToMemberFunction needs to be a value of type `TReturn (TObject::*)(TArgs...)` or `TReturn (TObject::*)(TArgs...) const`.");
 
 		return Method{
 			.invoke = &Detail::invoke_erased<PtrToMemberFunction, TObject, TReturn, TArgs...>,

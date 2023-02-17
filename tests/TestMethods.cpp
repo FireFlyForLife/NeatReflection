@@ -55,3 +55,21 @@ TEST_CASE("Invoke method return")
 	REQUIRE(result_int != nullptr);
 	REQUIRE(*result_int == MethodTester::test_method_return_value);
 }
+
+TEST_CASE("Invoke const method return")
+{
+	MethodTester method_tester{};
+
+	Neat::Type* type = Neat::get_type<MethodTester>();
+	REQUIRE(type != nullptr);
+
+	auto method = find_method(*type, "TestMethodConstReturn");
+	REQUIRE(method != nullptr);
+
+	auto result = method->invoke(&method_tester, {});
+
+	REQUIRE(result.has_value());
+	auto result_int = std::any_cast<int>(&result);
+	REQUIRE(result_int != nullptr);
+	REQUIRE(*result_int == MethodTester::test_method_const_return_value);
+}
