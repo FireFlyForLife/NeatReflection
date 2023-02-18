@@ -7,6 +7,7 @@
 #include <array>
 
 import TestModule1;
+import TestModule2;
 
 
 template<typename T>
@@ -110,6 +111,35 @@ TEST_CASE("Types have correct data")
 		CHECK(type->bases.empty());
 		CHECK(type->fields.empty());
 		CHECK(type->methods.empty());
+	}
+	
+	SECTION("MyBaseStruct2") {
+		Neat::Type* type = Neat::get_type<MyBaseStruct2>();
+		REQUIRE(type != nullptr);
+
+		CHECK(type->name == "MyBaseStruct2");
+		CHECK(type->id == Neat::get_id<MyBaseStruct2>());
+		CHECK(type->bases.empty());
+		REQUIRE(type->fields.size() == 1);
+		check_field(type->fields[0], type->id, Neat::get_id<int>(), "health");
+		REQUIRE(type->methods.empty());
+	}
+	
+	SECTION("MyStruct2") {
+		Neat::Type* type = Neat::get_type<MyStruct2>();
+		REQUIRE(type != nullptr);
+
+		CHECK(type->name == "MyStruct2");
+		CHECK(type->id == Neat::get_id<MyStruct2>());
+		const std::vector<Neat::BaseClass> type_expected_bases{ { Neat::get_id<MyBaseStruct2>(), Neat::Access::Public } };
+		CHECK(type->bases == type_expected_bases);
+		REQUIRE(type->fields.size() == 2);
+		check_field(type->fields[0], type->id, Neat::get_id<double>(), "damage");
+		check_field(type->fields[1], type->id, Neat::get_id<unsigned int>(), "speed");
+		REQUIRE(type->methods.size() == 3);
+		check_method(type->methods[0], type->id, Neat::get_id<void>(), "helper_function", {});
+		check_method(type->methods[1], type->id, Neat::get_id<void>(), "argumented_function", { Neat::get_id<int>(), Neat::get_id<int>() });
+		check_method(type->methods[2], type->id, Neat::get_id<int>(), "get_42", {});
 	}
 }
 

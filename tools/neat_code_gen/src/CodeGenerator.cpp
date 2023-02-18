@@ -55,7 +55,7 @@ namespace Neat
 {1}
 	}}
 
-	namespace Detail
+	namespace
 	{{
 		struct Register{{ Register(){{ Neat::reflect_private_members(); }} }};
 		static Register neat_reflection_data_initialiser{{ }};
