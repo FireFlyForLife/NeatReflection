@@ -122,7 +122,7 @@ namespace Neat
 		template<typename TObject, typename TType, TType TObject::* PtrToMember>
 		std::any get_value_erased(void* object)
 		{
-			TObject* object_ = reinterpret_cast<TObject*>(object);
+			TObject* object_ = static_cast<TObject*>(object);
 			return { object_->*PtrToMember };
 		}
 
@@ -131,7 +131,7 @@ namespace Neat
 		{
 			assert(std::any_cast<TType>(&value) != nullptr);
 
-			TObject* object_ = reinterpret_cast<TObject*>(object);
+			TObject* object_ = static_cast<TObject*>(object);
 			object_->*PtrToMember = std::any_cast<TType>(value);
 		}
 	}
@@ -162,7 +162,7 @@ namespace Neat
 				return (t_object->*PtrToMemberFunction)(std::any_cast<TArgs>(arguments[I])...);
 			};
 			
-			TObject* object_ = reinterpret_cast<TObject*>(object);
+			TObject* object_ = static_cast<TObject*>(object);
 
 			if constexpr (std::is_same_v<TReturn, void>)
 			{
