@@ -52,7 +52,7 @@ namespace Neat
 		std::vector<Method> methods;
 
 		// Operators
-		auto operator<=>(const Type& other) const noexcept = default;
+		bool operator==(const Type& other) const noexcept = default;
 	};
 
 	struct BaseClass
@@ -85,7 +85,7 @@ namespace Neat
 		Access access;
 
 		// Operators
-		auto operator<=>(const Field& other) const noexcept = default;
+		bool operator==(const Field& other) const noexcept = default;
 	};
 
 	struct Method
@@ -107,7 +107,7 @@ namespace Neat
 		Access access;
 
 		// Operators
-		auto operator<=>(const Method& other) const noexcept = default;
+		bool operator==(const Method& other) const noexcept = default;
 	};
 }
 
