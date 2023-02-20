@@ -14,7 +14,7 @@
 	FetchContent_Declare(
 		ifc-reader
 		GIT_REPOSITORY https://github.com/AndreyG/ifc-reader.git
-		GIT_TAG 3cd0d09c9b1cff645d17a8d725d1162719197c6f # Latest at the time of writing
+		GIT_TAG ca45629ce803a022c6a4a78e5631c0f8d6e3549d # Latest at the time of writing
 	)
 	FetchContent_Declare(
 		magic_enum
@@ -35,7 +35,7 @@
 	add_executable(NeatReflectionCodeGen "src/Main.cpp" "src/CodeGenerator.h" "src/CodeGenerator.cpp" "src/ContextualException.h" "src/ContextualException.cpp")
 	target_compile_features(NeatReflectionCodeGen PUBLIC cxx_std_20)
 	target_include_directories(NeatReflectionCodeGen PRIVATE "src")
-	target_link_libraries(NeatReflectionCodeGen PUBLIC NeatReflection docopt_s ifc-core magic_enum mio)
+	target_link_libraries(NeatReflectionCodeGen PUBLIC NeatReflection docopt_s reflifc magic_enum mio)
 
 	message(DEBUG "[NeatReflection] Using NeatReflectionCodeGen built from source.")
 	set(NEAT_REFLECTION_CODEGEN_EXE "NeatReflectionCodeGen" PARENT_SCOPE)

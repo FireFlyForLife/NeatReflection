@@ -6,41 +6,39 @@
 #include <string_view>
 #include <optional>
 
-#include "ifc/FileFwd.h"
-#include "ifc/DeclarationFwd.h"
-#include "ifc/NameFwd.h"
-#include "ifc/Scope.h"
-#include "ifc/TypeFwd.h"
-#include "ifc/ExpressionFwd.h"
-
+#include "reflifc/Module.h"
+#include "reflifc/TupleView.h"
+#include "reflifc/Type.h"
 
 class CodeGenerator
 {
 public:
-	CodeGenerator(ifc::File& file);
+	CodeGenerator();
 
-	void write_cpp_file(std::ostream& out);
+	void write_cpp_file(reflifc::Module module, std::ostream& out);
 
 private:
-	void scan(ifc::Sequence scope_desc);
-	void scan(ifc::DeclIndex decl);
-	void scan(const ifc::ScopeDeclaration& scope_decl, ifc::DeclIndex index);
+	void scan(reflifc::Scope scope_desc);
+	void scan(reflifc::Declaration decl);
+	void scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl);
 
-	void render(const ifc::ScopeDeclaration& scope_decl, ifc::DeclIndex index);
+	void render(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl);
 	struct TypeMembers { std::string fields, methods; };
-	TypeMembers render_members(std::string_view object, std::string_view type_variable, const ifc::ScopeDeclaration& scope_decl, bool reflect_private_members);
-	std::string render_bases(const ifc::ScopeDeclaration& scope_decl);
+	TypeMembers render_members(std::string_view object, std::string_view type_variable, reflifc::ClassOrStruct scope_decl, bool reflect_private_members);
+	std::string render_bases(reflifc::ClassOrStruct scope_decl);
 	
-	std::string render_full_typename(ifc::TypeIndex type_index);
+	std::string render_full_typename(reflifc::Type type);
+	std::string render_full_typename(reflifc::FunctionType type);
 	std::string render_full_typename(const ifc::FundamentalType& type);
-	std::string render_full_typename(const ifc::TupleType& types);
-	std::string render_full_typename(ifc::ExprIndex expr_index);
-	std::string render_full_typename(const ifc::TupleExpression& expressions);
-	std::string render_full_typename(ifc::DeclIndex decl_index);
+	std::string render_full_typename(reflifc::Expression expr);
+	std::string render_full_typename(reflifc::TupleExpressionView tuple);
+	std::string render_full_typename(reflifc::TemplateId template_id);
+	std::string render_full_typename(reflifc::Declaration decl);
 
-	std::string render_refered_declaration(const ifc::DeclIndex& decl_index);
+	std::string render_refered_declaration(reflifc::Declaration decl);
 
-	std::string render_namespace(ifc::DeclIndex index);
+	std::string render_namespace(reflifc::Declaration decl);
+	std::string render_namespace_of_decl(auto decl);
 
 	std::string render(ifc::Qualifiers qualifiers);
 	std::string_view render(Neat::Access access);
@@ -49,20 +47,19 @@ private:
 
 	// Expected to be `ifc::FieldDeclaration` or `ifc::MethodDeclaration`
 	template<typename T>
-	bool is_member_publicly_accessible(const T& member_declaration, ifc::TypeBasis type, bool reflects_private_members);
-	bool reflects_private_members(ifc::DeclIndex type_decl_index);
-	bool is_type_exported(ifc::TypeIndex);
-	bool is_type_exported(ifc::DeclIndex);
-	bool is_type_exported(ifc::ExprIndex);
-	bool is_type_exported(const ifc::TupleExpression&);
+	bool is_member_publicly_accessible(T member_declaration, ifc::TypeBasis type, bool reflects_private_members);
+	bool reflects_private_members(reflifc::Declaration type_decl);
+	bool is_type_exported(reflifc::Type type);
+	bool is_type_exported(reflifc::MethodType method);
+	bool is_type_exported(reflifc::Declaration decl);
+	bool is_type_exported(reflifc::Expression expr);
+	bool is_type_exported(reflifc::TemplateId template_id);
 
 private:
-	ifc::File& file;
 	std::string code;
 };
 
 std::optional<Neat::Access> convert(ifc::Access);
-std::string_view get_user_type_name(const ifc::File& file, ifc::NameIndex name);
 std::string replace_all_copy(std::string str, std::string_view target, std::string_view replacement);
 std::string to_snake_case(std::string_view type_name);
 
@@ -74,14 +71,12 @@ std::string to_snake_case(std::string_view type_name);
 #include <iostream>
 
 #include "ifc/Type.h"
-#include "ifc/Declaration.h"
-#include "ifc/File.h"
 #include "magic_enum.hpp"
 
 template<typename T>
-bool CodeGenerator::is_member_publicly_accessible(const T& member_declaration, ifc::TypeBasis type, bool reflects_private_members)
+bool CodeGenerator::is_member_publicly_accessible(T member_declaration, ifc::TypeBasis type, bool reflects_private_members)
 {
-	if (!is_type_exported(member_declaration.type))
+	if (!is_type_exported(member_declaration.type()))
 	{
 		return false;
 	}
@@ -101,7 +96,7 @@ bool CodeGenerator::is_member_publicly_accessible(const T& member_declaration, i
 		//	magic_enum::enum_name(type));
 	}
 
-	const Neat::Access member_access = convert(member_declaration.access).value_or(default_access);
+	const Neat::Access member_access = convert(member_declaration.access()).value_or(default_access);
 
 	return (member_access == Neat::Access::Public || reflects_private_members);
 }
