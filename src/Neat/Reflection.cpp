@@ -9,7 +9,11 @@ namespace Neat
 {
 	struct TypeContainer
 	{
-		std::unordered_map<std::string, uint32_t> by_type_name;
+		struct string_hash : std::hash<std::string_view> {
+			using is_transparent = std::true_type;
+		};
+
+		std::unordered_map<std::string, uint32_t, string_hash, std::equal_to<>> by_type_name;
 		std::unordered_map<TemplateTypeId, uint32_t> by_template_type_id;
 		std::vector<Type> types;
 	};
@@ -31,7 +35,7 @@ namespace Neat
 
 	Type* get_type(std::string_view type_name)
 	{
-		auto it = type_container.by_type_name.find(std::string{ type_name }); // TODO: Avoid allocation
+		auto it = type_container.by_type_name.find(type_name);
 		if (it == type_container.by_type_name.end())
 		{
 			return nullptr;
