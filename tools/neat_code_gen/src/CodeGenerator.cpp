@@ -8,31 +8,44 @@
 #include <algorithm>
 #include <iostream>
 
-#include "ifc/Declaration.h"
-#include "ifc/File.h"
+#include "reflifc/Expression.h"
+#include "reflifc/TemplateId.h"
+#include "reflifc/decl/AliasDeclaration.h"
+#include "reflifc/decl/ClassOrStruct.h"
+#include "reflifc/decl/Concept.h"
+#include "reflifc/decl/Enumeration.h"
+#include "reflifc/decl/Function.h"
+#include "reflifc/decl/Intrinsic.h"
+#include "reflifc/decl/Namespace.h"
+#include "reflifc/decl/Parameter.h"
+#include "reflifc/decl/TemplateDeclaration.h"
+#include "reflifc/decl/UsingDeclaration.h"
+#include "reflifc/type/Function.h"
+#include "reflifc/type/Pointer.h"
+#include "reflifc/type/Placeholder.h"
+#include "reflifc/type/Qualified.h"
+#include "reflifc/type/Reference.h"
+
 #include "ifc/Expression.h"
-#include "ifc/Type.h"
-#include "ifc/Name.h"
+
 #include "magic_enum.hpp"
 
-
-CodeGenerator::CodeGenerator(ifc::File& file)
-	: file(file)
+CodeGenerator::CodeGenerator()
 {
 	code.reserve(1024);
 }
 
-void CodeGenerator::write_cpp_file(std::ostream& out)
+void CodeGenerator::write_cpp_file(reflifc::Module module, std::ostream& out)
 {
-	if (file.header().unit.sort() != ifc::UnitSort::Primary) // For now
+	auto unit = module.unit();
+	if (!unit.is_primary()) // For now
 	{
 		throw ContextualException("Currently the tool only supports primary module fragments (originating from a .ixx file from MSVC for example).");
 	}
 
-	auto unit_index = file.header().unit.index;
-	const auto module_name = file.get_string(ifc::TextOffset{ unit_index });
+	const auto module_name = unit.name();
 	
-	scan(file.global_scope());
+	scan(module.global_namespace());
 	
 	out << std::format(
 R"(// ================================================================================
@@ -65,54 +78,50 @@ namespace Neat
 	out.flush();
 }
 
-void CodeGenerator::scan(ifc::Sequence scope_desc)
+void CodeGenerator::scan(reflifc::Scope scope_desc)
 {
-	auto declarations = ifc::get_declarations(file, scope_desc);
-	for (auto& declaration : declarations)
+	auto declarations = scope_desc.get_declarations();
+	for (auto declaration : declarations)
 	{
-		scan(declaration.index);
+		scan(declaration);
 	}
 }
 
-void CodeGenerator::scan(ifc::DeclIndex decl)
+void CodeGenerator::scan(reflifc::Declaration decl)
 {
-	switch (decl.sort())
-	{
-	case ifc::DeclSort::Scope:
-		scan(ifc::get_scope(file, decl), decl);
-		break;
-	}
+	if (decl.is_scope())
+		scan(decl.as_scope(), decl);
 }
 
-void CodeGenerator::scan(const ifc::ScopeDeclaration& scope_decl, ifc::DeclIndex index)
+void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl)
 {
-	switch (ifc::get_kind(scope_decl, file))
+	switch (scope_decl.kind())
 	{
 	case ifc::TypeBasis::Class:
 	case ifc::TypeBasis::Struct:
 		{
-			render(scope_decl, index);
+			render(scope_decl.as_class_or_struct(), decl);
 		}
 		break;
 	case ifc::TypeBasis::Union:
 		// TODO: Implement at some point
 		break;
 	case ifc::TypeBasis::Namespace:
-		scan(file.scope_descriptors()[scope_decl.initializer]);
+		scan(scope_decl.as_namespace().scope());
 		break;
 	}
 }
 
-void CodeGenerator::render(const ifc::ScopeDeclaration& scope_decl, ifc::DeclIndex index)
+void CodeGenerator::render(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl)
 {
-	if(!is_type_exported(index))
+	if(!is_type_exported(decl))
 	{
 		return;
 	}
 
-	const auto type_name = render_namespace(index) + std::string{get_user_type_name(file, scope_decl.name)};
+	const auto type_name = render_namespace(decl) + scope_decl.name().as_identifier();
 	const auto var_name = to_snake_case(type_name) + '_';
-	const bool reflect_privates = reflects_private_members(index);
+	const bool reflect_privates = reflects_private_members(decl);
 	const auto [fields, methods] = render_members(type_name, var_name, scope_decl, reflect_privates);
 	const auto bases = render_bases(scope_decl);
 
@@ -124,25 +133,24 @@ void CodeGenerator::render(const ifc::ScopeDeclaration& scope_decl, ifc::DeclInd
 )", var_name, type_name, bases, fields, methods);
 }
 
-CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_name, std::string_view type_variable, const ifc::ScopeDeclaration& scope_decl, bool reflect_private_members)
+CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_name, std::string_view type_variable, reflifc::ClassOrStruct scope_decl, bool reflect_private_members)
 {
 	std::string fields;
 	std::string methods;
 
-	auto scope_descriptor = file.scope_descriptors()[scope_decl.initializer];
-	auto declarations = ifc::get_declarations(file, scope_descriptor);
-	for (auto& decl : declarations)
+	auto declarations = scope_decl.members();
+	for (auto decl : declarations)
 	{
-		switch (decl.index.sort())
+		switch (decl.sort())
 		{
 		case ifc::DeclSort::Field:
 		{
-			const auto& field = file.fields()[decl.index];
-			const auto type = render_full_typename(field.type);
-			const auto name = file.get_string(field.name);
-			const auto access = render_as_neat_access_enum(field.access, "Access::...");
+			const auto field = decl.as_field();
+			const auto type = render_full_typename(field.type());
+			const auto name = field.name();
+			const auto access = render_as_neat_access_enum(field.access(), "Access::...");
 
-			if (is_member_publicly_accessible(field, ifc::get_kind(scope_decl, file), reflect_private_members))
+			if (is_member_publicly_accessible(field, scope_decl.kind(), reflect_private_members))
 			{
 				fields += std::format(R"(Field::create<{0}, {1}, &{0}::{2}>("{2}", {3}), )", type_name, type, name, access);
 			}
@@ -150,19 +158,21 @@ CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_n
 		}
 		case ifc::DeclSort::Method:
 		{
-			const auto& method = file.methods()[decl.index];
-			assert(method.type.sort() == ifc::TypeSort::Method);
-			const auto& method_type = file.method_types()[method.type];
-			const auto return_type = render_full_typename(method_type.target);
+			const auto method = decl.as_method();
+			const auto method_type = method.type();
+			const auto return_type = render_full_typename(method_type.return_type());
+			auto params = method_type.parameters();
 			auto param_types = std::string{ "" };
-			if (!method_type.source.is_null())
+			param_types.reserve(params.size() * 8);
+			for (auto param : params)
 			{
-				param_types = ", " + render_full_typename(method_type.source);
+				param_types += ", ";
+				param_types += render_full_typename(param);
 			}
-			const auto name = get_user_type_name(file, method.name);
-			const auto access = render_as_neat_access_enum(method.access);
+			const auto name = method.name().as_identifier();
+			const auto access = render_as_neat_access_enum(method.access());
 
-			if (is_member_publicly_accessible(method, ifc::get_kind(scope_decl, file), reflect_private_members))
+			if (is_member_publicly_accessible(method, scope_decl.kind(), reflect_private_members))
 			{
 				methods += std::format(R"(Method::create<&{0}::{3}, {0}, {1}{2}>("{3}", {4}), )", type_name, return_type, param_types, name, access);
 			}
@@ -173,107 +183,63 @@ CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_n
 	return { fields, methods };
 }
 
-std::string CodeGenerator::render_bases(const ifc::ScopeDeclaration& scope_decl)
+std::string CodeGenerator::render_bases(reflifc::ClassOrStruct scope_decl)
 {
 	// Otherwise struct
-	const bool is_class = (ifc::get_kind(scope_decl, file) == ifc::TypeBasis::Class);
+	const bool is_class = (scope_decl.kind() == ifc::TypeBasis::Class);
 	const auto default_access = (is_class ? "private" : "public");
 
-	auto base_index = scope_decl.base;
-	if (base_index.is_null())
-	{
-		return "";
-	}
+	auto bases = scope_decl.bases();
 
-	const auto render_base = [this, default_access] (const ifc::BaseType& base_type) -> std::string
+	const auto render_base = [this, default_access] (reflifc::BaseType base_type) -> std::string
 	{
 		auto access_string = render_as_neat_access_enum(base_type.access, default_access);
 		auto type_name = render_full_typename(base_type.type);
 		return std::format(R"(BaseClass{{ get_id<{0}>(), {1} }}, )", type_name, access_string);
 	};
 
-	switch (base_index.sort())
+	std::string rendered;
+	rendered.reserve(bases.size() * 16);
+
+	for (auto type : bases)
 	{
-	case ifc::TypeSort::Base: 
-		return render_base(file.base_types()[base_index]);
-	case ifc::TypeSort::Tuple:
-		{
-			auto& tuple_type = file.tuple_types()[base_index];
-
-			std::string rendered;
-			rendered.reserve(ifc::raw_count(tuple_type.seq.cardinality) * 16);
-
-			for (auto& type : file.type_heap().slice(tuple_type.seq))
-			{
-				if (type.sort() == ifc::TypeSort::Base)
-				{
-					rendered += render_base(file.base_types()[type]);
-				}
-				else
-				{
-					assert(false && "unexpected base type");
-				}
-			}
-
-			return rendered;
-		}
-		break;
-	default:
-		// TODO: Throw exception
-		assert(false && "Unexpected base class type sort");
-		return "";
+		rendered += render_base(type);
 	}
+
+	return rendered;
 }
 
-std::string CodeGenerator::render_full_typename(ifc::TypeIndex type_index)
+std::string CodeGenerator::render_full_typename(reflifc::Type type)
 {
-	switch (type_index.sort())
+	switch (type.sort())
 	{
 	case ifc::TypeSort::Fundamental:
-		return render_full_typename(file.fundamental_types()[type_index]);
+		return render_full_typename(type.as_fundamental());
 	case ifc::TypeSort::Designated:
 		{
-			const auto& designated_type = file.designated_types()[type_index];
-			return render_namespace(designated_type.decl) + render_refered_declaration(designated_type.decl);
+			const auto designated_declaration = type.designation();
+			return render_namespace(designated_declaration) + render_refered_declaration(designated_declaration);
 		}
 	case ifc::TypeSort::Pointer:
-		return render_full_typename(file.pointer_types()[type_index].pointee) + "*";
+		return render_full_typename(type.as_pointer().pointee) + "*";
 	case ifc::TypeSort::LvalueReference:
-		return render_full_typename(file.lvalue_references()[type_index].referee) + "&";
+		return render_full_typename(type.as_lvalue_reference().referee) + "&";
 	case ifc::TypeSort::RvalueReference:
-		return render_full_typename(file.rvalue_references()[type_index].referee) + "&&";
+		return render_full_typename(type.as_rvalue_reference().referee) + "&&";
 	case ifc::TypeSort::Qualified:
-		return render_full_typename(file.qualified_types()[type_index].unqualified) +
-			render(file.qualified_types()[type_index].qualifiers);
-	case ifc::TypeSort::Base:
-		// render only the typename, no access modifiers or specifiers
-		return render_full_typename(file.base_types()[type_index].type);
+		return render_full_typename(type.as_qualified().unqualified()) +
+			render(type.as_qualified().qualifiers());
 	case ifc::TypeSort::Placeholder:
-		if (auto& elaborated_type = file.placeholder_types()[type_index].elaboration; !elaborated_type.is_null())
+		if (auto elaborated_type = type.as_placeholder().elaboration())
 		{
 			return render_full_typename(elaborated_type);
 		}
 		assert(false && "IFC doesn't contain deduced type");
 		return "PLACEHOLDER_TYPE";
-	case ifc::TypeSort::Tuple:
-		return render_full_typename(file.tuple_types()[type_index]);
 	case ifc::TypeSort::Function: // U (*)(Args...);
-		{
-			auto& function_type = file.function_types()[type_index];
-			auto return_type = render_full_typename(function_type.target);
-			std::string parameter_types;
-			if (!function_type.source.is_null()) {
-				parameter_types = render_full_typename(function_type.source);
-			}
-			return return_type + " (" + parameter_types + ")";
-		}
-		break;
+		return render_full_typename(type.as_function());
 	case ifc::TypeSort::Syntactic:
-		{
-			auto& syntactic = file.syntactic_types()[type_index];
-			return render_full_typename(syntactic.expr);
-		}
-		break;
+		return render_full_typename(type.as_syntactic());
 
 		// Currently unsupported
 	case ifc::TypeSort::Expansion: // variadic pack expansion (...)
@@ -292,8 +258,26 @@ std::string CodeGenerator::render_full_typename(ifc::TypeIndex type_index)
 
 	default:
 		//assert(false && "Not supported yet");
-		return std::format("<UNSUPPORTED_TYPE {}>", magic_enum::enum_name(type_index.sort()));
+		return std::format("<UNSUPPORTED_TYPE {}>", magic_enum::enum_name(type.sort()));
 	}
+}
+
+std::string CodeGenerator::render_full_typename(reflifc::FunctionType function_type) // U (*)(Args...);
+{
+	auto return_type = render_full_typename(function_type.return_type());
+	std::string parameter_types;
+	auto params = function_type.parameters();
+	parameter_types.reserve(params.size() * 8);
+	bool first = true;
+	for (auto param : params)
+	{
+		if (first)
+			first = false;
+		else
+			parameter_types += ", ";
+		parameter_types += render_full_typename(param);
+	}
+	return return_type + " (" + parameter_types + ")";
 }
 
 std::string CodeGenerator::render_full_typename(const ifc::FundamentalType& type)
@@ -373,74 +357,40 @@ std::string CodeGenerator::render_full_typename(const ifc::FundamentalType& type
 }
 
 
-std::string CodeGenerator::render_full_typename(const ifc::TupleType& types)
+std::string CodeGenerator::render_full_typename(reflifc::TemplateId template_id)
 {
-	std::string rendered;
-	rendered.reserve(ifc::raw_count(types.seq.cardinality) * 8); // Preallocate a reasonable amount
-
-	bool first = true;
-	for (auto& type : file.type_heap().slice(types.seq))
-	{
-		if (!first)
-		{
-			rendered += ", ";
-		}
-
-		rendered += render_full_typename(type);
-
-		first = false;
-	}
-
-	return rendered;
+	return std::format("{}<{}>",
+		render_full_typename(template_id.primary()),
+		render_full_typename(template_id.arguments()));
 }
 
-std::string CodeGenerator::render_full_typename(ifc::ExprIndex expr_index)
+std::string CodeGenerator::render_full_typename(reflifc::Expression expr)
 {
-	switch (expr_index.sort())
+	switch (expr.sort())
 	{
 	case ifc::ExprSort::NamedDecl:
-		{
-			auto& named_decl = file.decl_expressions()[expr_index];
-			return render_full_typename(named_decl.resolution);
-		}
-		break;
+		return render_full_typename(expr.referenced_decl());
 	case ifc::ExprSort::Type:
-		{
-			auto type_expr = file.type_expressions()[expr_index];
-			return render_full_typename(type_expr.denotation);
-		}
-		break;
+		return render_full_typename(expr.as_type());
 	case ifc::ExprSort::TemplateId:
-		{
-			auto& template_id = file.template_ids()[expr_index];
-			return std::format("{}<{}>", 
-				render_full_typename(template_id.primary),
-				render_full_typename(template_id.arguments));
-		}
-		break;
-	case ifc::ExprSort::Tuple:
-		{
-			auto& tuple_expr = file.tuple_expressions()[expr_index];
-			return render_full_typename(tuple_expr);
-		}
-	break;
+		return render_full_typename(expr.as_template_id());
 	case ifc::ExprSort::Empty:
 		return "";
 
 		// This function is only for rendering a typename, most expression sorts are not used for that so will be ignored:
 	default:
 		throw ContextualException(std::format("Unexpected expression while rendering typename. ExprSort is: {}",
-			magic_enum::enum_name(expr_index.sort())));
+			magic_enum::enum_name(expr.sort())));
 	}
 }
 
-std::string CodeGenerator::render_full_typename(const ifc::TupleExpression& expressions)
+std::string CodeGenerator::render_full_typename(reflifc::TupleExpressionView tuple)
 {
 	std::string rendered;
-	rendered.reserve(ifc::raw_count(expressions.seq.cardinality) * 8); // Preallocate a reasonable amount
+	rendered.reserve(tuple.size() * 8); // Preallocate a reasonable amount
 
 	bool first = true;
-	for (auto& expression : file.expr_heap().slice(expressions.seq))
+	for (auto expression : tuple)
 	{
 		if (!first)
 		{
@@ -451,43 +401,41 @@ std::string CodeGenerator::render_full_typename(const ifc::TupleExpression& expr
 
 		first = false;
 	}
-
 	return rendered;
 }
 
-std::string CodeGenerator::render_full_typename(ifc::DeclIndex decl_index)
+std::string CodeGenerator::render_full_typename(reflifc::Declaration decl)
 {
-	return render_namespace(decl_index) + render_refered_declaration(decl_index);
+	return render_namespace(decl) + render_refered_declaration(decl);
 }
 
 
-std::string CodeGenerator::render_refered_declaration(const ifc::DeclIndex& decl_index)
+std::string CodeGenerator::render_refered_declaration(reflifc::Declaration decl)
 {
-	switch (const auto kind = decl_index.sort())
+	switch (const auto kind = decl.sort())
 	{
 	case ifc::DeclSort::Parameter:
 	{
-		ifc::ParameterDeclaration const& param = file.parameters()[decl_index];
-		return file.get_string(param.name);
+		reflifc::Parameter param = decl.as_parameter();
+		return param.name();
 	}
 	break;
 	case ifc::DeclSort::Scope:
 	{
-		ifc::ScopeDeclaration const& scope = get_scope(file, decl_index);
-		return std::string{ get_user_type_name(file, scope.name) };
+		reflifc::ScopeDeclaration scope = decl.as_scope();
+		return scope.name().as_identifier();
 	}
 	break;
 	case ifc::DeclSort::Template:
 	{
-		ifc::TemplateDeclaration const& template_declaration = file.template_declarations()[decl_index];
-		return std::string{ get_user_type_name(file, template_declaration.name) };
+		reflifc::TemplateDeclaration template_declaration = decl.as_template();
+		return template_declaration.name().as_identifier();
 	}
 	break;
 	case ifc::DeclSort::Function:
 	{
-		ifc::FunctionDeclaration const& function = file.functions()[decl_index];
-		
-		return std::string{ get_user_type_name(file, function.name) };
+		reflifc::Function function = decl.as_function();
+		return function.name().as_identifier();
 	}
 	break;
 	//case ifc::DeclSort::Reference:
@@ -495,8 +443,8 @@ std::string CodeGenerator::render_refered_declaration(const ifc::DeclIndex& decl
 	//	break;
 	case ifc::DeclSort::Enumeration:
 	{
-		auto const& enumeration = file.enumerations()[decl_index];
-		return file.get_string(enumeration.name);
+		auto enumeration = decl.as_enumeration();
+		return enumeration.name();
 	}
 	break;
 	default:
@@ -505,51 +453,36 @@ std::string CodeGenerator::render_refered_declaration(const ifc::DeclIndex& decl
 	}
 }
 
-std::string CodeGenerator::render_namespace(ifc::DeclIndex index)
+std::string CodeGenerator::render_namespace(reflifc::Declaration decl)
 {
-	ifc::DeclIndex home_scope{};
-
-	switch (const auto sort = index.sort())
+	switch (const auto sort = decl.sort())
 	{
         case ifc::DeclSort::Variable:
-			home_scope = file.variables()[index].home_scope;
-			break;
+			return render_namespace_of_decl(decl.as_variable());
         case ifc::DeclSort::Field:
-			home_scope = file.fields()[index].home_scope;
-			break;
+			return render_namespace_of_decl(decl.as_field());
         case ifc::DeclSort::Scope:
-			home_scope = file.scope_declarations()[index].home_scope;
-			break;
+			return render_namespace_of_decl(decl.as_scope());
 		case ifc::DeclSort::Intrinsic:
-			home_scope = file.intrinsic_declarations()[index].home_scope;
-			break;
+			return render_namespace_of_decl(decl.as_intrinsic());
 		case ifc::DeclSort::Enumeration:
-			home_scope = file.enumerations()[index].home_scope;
-			break;
+			return render_namespace_of_decl(decl.as_enumeration());
         case ifc::DeclSort::Alias:
-			home_scope = file.alias_declarations()[index].home_scope;
-			break;
+			return render_namespace_of_decl(decl.as_alias());
         case ifc::DeclSort::Template:
-			home_scope = file.template_declarations()[index].home_scope;
-			break;
+			return render_namespace_of_decl(decl.as_template());
         case ifc::DeclSort::Concept:
-			home_scope = file.concepts()[index].home_scope;
-			break;
+			return render_namespace_of_decl(decl.as_concept());
         case ifc::DeclSort::Function:
-			home_scope = file.functions()[index].home_scope;
-			break;
+			return render_namespace_of_decl(decl.as_function());
         case ifc::DeclSort::Method:
-			home_scope = file.methods()[index].home_scope;
-			break;
+			return render_namespace_of_decl(decl.as_method());
         case ifc::DeclSort::Constructor:
-			home_scope = file.constructors()[index].home_scope;
-			break;
+			return render_namespace_of_decl(decl.as_constructor());
         case ifc::DeclSort::Destructor:
-			home_scope = file.destructors()[index].home_scope;
-			break;
+			return render_namespace_of_decl(decl.as_destructor());
 		case ifc::DeclSort::UsingDeclaration:
-			home_scope = file.using_declarations()[index].home_scope;
-			break;
+			return render_namespace_of_decl(decl.as_using());
 
 			// Currently unsupported:
 		case ifc::DeclSort::Bitfield:
@@ -573,10 +506,14 @@ std::string CodeGenerator::render_namespace(ifc::DeclIndex index)
 		case ifc::DeclSort::SyntaxTree:
 		case ifc::DeclSort::Property:
         case ifc::DeclSort::OutputSegment:
-			throw ContextualException( std::format("Cannot get the home_scope for a decl sort of: {}", magic_enum::enum_name(index.sort())) );
+			throw ContextualException( std::format("Cannot get the home_scope for a decl sort of: {}", magic_enum::enum_name(sort)) );
 	}
+}
 
-	if (home_scope.is_null()) {
+std::string CodeGenerator::render_namespace_of_decl(auto decl)
+{
+	reflifc::Declaration home_scope = decl.home_scope();
+	if (!home_scope) {
 		return "";
 	}
 
@@ -640,23 +577,21 @@ std::string CodeGenerator::render_neat_access_enum(Neat::Access access)
 	}
 }
 
-bool CodeGenerator::reflects_private_members(ifc::DeclIndex index)
+bool CodeGenerator::reflects_private_members(reflifc::Declaration type_decl)
 {
-	auto friends = file.trait_friendship_of_class(index);
-	for (auto friend_declaration : file.declarations().slice(friends))
+	for (auto expr_index : type_decl.friends())
 	{
-		assert(friend_declaration.index.sort() == ifc::DeclSort::Friend);
-		auto expr_index = file.friends()[friend_declaration.index].entity;
-		
 		switch (expr_index.sort())
 		{
 		case ifc::ExprSort::NamedDecl:
 			{
-				auto& named_decl = file.decl_expressions()[expr_index];
+				auto named_decl = expr_index.referenced_decl();
+				if (!named_decl.is_function())
+					return false;
 
 				// TODO OPT: Don't require allocations for these comparisons.
-				auto friend_name = render_namespace(named_decl.resolution) + render_refered_declaration(named_decl.resolution);
-				auto rendered_type = render_full_typename(named_decl.type);
+				auto friend_name = render_namespace(named_decl) + render_refered_declaration(named_decl);
+				auto rendered_type = render_full_typename(named_decl.as_function().type());
 				return friend_name == "Neat::reflect_private_members"
 					&& rendered_type == "void ()";
 			}
@@ -672,94 +607,65 @@ bool CodeGenerator::reflects_private_members(ifc::DeclIndex index)
 	return false;
 }
 
-bool CodeGenerator::is_type_exported(ifc::TypeIndex type_index)
+bool CodeGenerator::is_type_exported(reflifc::Type type)
 {
-	switch (type_index.sort())
+	switch (type.sort())
 	{
 	case ifc::TypeSort::Fundamental:
 		return true;
 	case ifc::TypeSort::Designated:
-		{
-			const auto& designated_type = file.designated_types()[type_index];
-			return is_type_exported(designated_type.decl);
-		}
-		break;
-	case ifc::TypeSort::Method:
-		{
-			const auto& method = file.method_types()[type_index];
-			return (is_type_exported(method.target) && (method.source.is_null() || is_type_exported(method.source)));
-		}
-		break;
-	case ifc::TypeSort::Tuple:
-		{
-			const auto& param_type_tuple = file.tuple_types()[type_index];
-			const auto param_types = file.type_heap().slice(param_type_tuple.seq);
-			return std::all_of(param_types.begin(), param_types.end(), 
-				[this] (ifc::TypeIndex param) { return is_type_exported(param); });
-		}
-		break;
+		return is_type_exported(type.designation());
 	case ifc::TypeSort::Syntactic:
 		{
-			const auto& syntactic = file.syntactic_types()[type_index];
-			return is_type_exported(syntactic.expr);
+			const auto syntactic = type.as_syntactic();
+			return is_type_exported(syntactic);
 		}
 	default:
 		throw ContextualException(std::format("Unexpected type while checking if the type was exported. type sort: {}",
-			magic_enum::enum_name(type_index.sort())));
+			magic_enum::enum_name(type.sort())));
 	}
 }
 
-bool CodeGenerator::is_type_exported(ifc::DeclIndex index)
+bool CodeGenerator::is_type_exported(reflifc::MethodType method)
+{
+	return is_type_exported(method.return_type()) &&
+			std::ranges::all_of(method.parameters(), [this] (reflifc::Type type) { return is_type_exported(type); });
+}
+
+bool CodeGenerator::is_type_exported(reflifc::Declaration decl)
 {
 	ifc::BasicSpecifiers specifiers{};
 
-	switch (index.sort())
+	switch (decl.sort())
 	{
 	case ifc::DeclSort::Scope:
-		specifiers = file.scope_declarations()[index].specifiers;
+		specifiers = decl.as_scope().specifiers();
 		break;
 	case ifc::DeclSort::Enumeration:
-		specifiers = file.enumerations()[index].specifiers;
+		specifiers = decl.as_enumeration().specifiers();
 		break;
 	case ifc::DeclSort::Template:
-		specifiers = file.template_declarations()[index].specifiers;
+		specifiers = decl.as_template().specifiers();
 		break;
 	default:
 		throw ContextualException(std::format("Unexpected declaration while checking if the type decl was exported. type decl sort: {}",
-			magic_enum::enum_name(index.sort())));
+			magic_enum::enum_name(decl.sort())));
 	}
 
 	using namespace magic_enum::bitwise_operators;
 	return (magic_enum::enum_underlying(specifiers & ifc::BasicSpecifiers::NonExported) == 0);
 }
 
-bool CodeGenerator::is_type_exported(ifc::ExprIndex index)
+bool CodeGenerator::is_type_exported(reflifc::Expression expr)
 {
-	switch (index.sort())
+	switch (expr.sort())
 	{
 	case ifc::ExprSort::NamedDecl:
-		{
-			auto& expr_named_decl = file.decl_expressions()[index];
-			return is_type_exported(expr_named_decl.resolution);
-		}
-		break;
+		return is_type_exported(expr.referenced_decl());
 	case ifc::ExprSort::Type:
-		{
-			auto& expr_type = file.type_expressions()[index];
-			return is_type_exported(expr_type.denotation);
-		}
-		break;
+		return is_type_exported(expr.as_type());
 	case ifc::ExprSort::TemplateId:
-		{
-			auto& template_id = file.template_ids()[index];
-			return is_type_exported(template_id.primary) && is_type_exported(template_id.arguments);
-		}
-	case ifc::ExprSort::Tuple:
-		{
-			auto& expr_tuple = file.tuple_expressions()[index];
-			return is_type_exported(expr_tuple);
-		}
-		break;
+		return is_type_exported(expr.as_template_id());
 	case ifc::ExprSort::Empty:
 		return false;
 
@@ -775,16 +681,16 @@ bool CodeGenerator::is_type_exported(ifc::ExprIndex index)
 		// The rest is not supported, these expressions are for internals similar to a syntax tree.
 	default:
 		throw ContextualException(std::format("Unexpected expression while checking if the type can be exported. ExprSort is: {}",
-			magic_enum::enum_name(index.sort())));
+			magic_enum::enum_name(expr.sort())));
 	}
 }
 
-bool CodeGenerator::is_type_exported(const ifc::TupleExpression& tuple_expression)
+bool CodeGenerator::is_type_exported(reflifc::TemplateId template_id)
 {
-	auto expressions = file.expr_heap().slice(tuple_expression.seq);
-	return std::all_of(expressions.begin(), expressions.end(), [this](ifc::ExprIndex index)
+	return is_type_exported(template_id.primary()) &&
+		std::ranges::all_of(template_id.arguments(), [this](reflifc::Expression arg)
 		{
-			return is_type_exported(index);
+			return is_type_exported(arg);
 		});
 }
 
@@ -800,12 +706,6 @@ std::optional<Neat::Access> convert(ifc::Access ifc_access)
 		throw ContextualException(std::format("Invalid value for ifc::Access. {} to {} (inclusive) was expected, but {} was given",
 			magic_enum::enum_underlying(ifc::Access::None), magic_enum::enum_underlying(ifc::Access::Public), magic_enum::enum_underlying(ifc_access)));
 	}
-}
-
-std::string_view get_user_type_name(const ifc::File& file, ifc::NameIndex name)
-{
-	assert(name.sort() == ifc::NameSort::Identifier);
-	return { file.get_string(ifc::TextOffset{ name.index }) };
 }
 
 std::string replace_all_copy(std::string str, std::string_view target, std::string_view replacement)

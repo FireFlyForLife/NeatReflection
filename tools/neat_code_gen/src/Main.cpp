@@ -73,8 +73,8 @@ bool convert_ifc_file(const std::string& ifc_filename, const std::string& cpp_fi
         return false;
     }
 
-    CodeGenerator code_generator{ ifc_file };
-    code_generator.write_cpp_file(file_stream);
+    CodeGenerator code_generator;
+    code_generator.write_cpp_file(reflifc::Module(ifc_file), file_stream);
 
     return true;
 }
