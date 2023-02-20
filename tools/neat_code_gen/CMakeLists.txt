@@ -14,7 +14,7 @@
 	FetchContent_Declare(
 		ifc-reader
 		GIT_REPOSITORY https://github.com/AndreyG/ifc-reader.git
-		GIT_TAG fa4dd3e92f0a2bb241459c217f9b4e0696d27b19 # Latest at the time of writing
+		GIT_TAG ca45629ce803a022c6a4a78e5631c0f8d6e3549d # Latest at the time of writing
 	)
 	FetchContent_Declare(
 		magic_enum

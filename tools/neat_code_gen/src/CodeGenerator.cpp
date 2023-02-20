@@ -616,10 +616,9 @@ bool CodeGenerator::is_type_exported(reflifc::Type type)
 	case ifc::TypeSort::Designated:
 		return is_type_exported(type.designation());
 	case ifc::TypeSort::Syntactic:
-		{
-			const auto syntactic = type.as_syntactic();
-			return is_type_exported(syntactic);
-		}
+		return is_type_exported(type.as_syntactic());
+	case ifc::TypeSort::Method:
+		return is_type_exported(type.as_method());
 	default:
 		throw ContextualException(std::format("Unexpected type while checking if the type was exported. type sort: {}",
 			magic_enum::enum_name(type.sort())));
