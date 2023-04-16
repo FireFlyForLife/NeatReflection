@@ -194,3 +194,55 @@ namespace Neat
 		};
 	}
 }
+
+namespace Neat::HashUtils
+{
+	template <typename T, typename... Rest>
+	void combine(std::size_t& seed, const T& v, const Rest&... rest)
+	{
+		seed ^= std::hash<T>{}(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+		(combine(seed, rest), ...);
+	}
+}
+
+namespace std
+{
+	template<typename T>
+	struct hash;
+
+	template<>
+	struct hash<Neat::Type>
+	{
+		size_t operator()(const Neat::Type& type) const noexcept {
+			return type.id;
+		}
+	};
+
+	template<>
+	struct hash<Neat::Field>
+	{
+		size_t operator()(const Neat::Field& field) const {
+			size_t h = 0;
+			Neat::HashUtils::combine(h, field.type, field.name);
+			return h;
+		}
+	};
+
+	template<>
+	struct hash<Neat::Method>
+	{
+		size_t operator()(const Neat::Method& method) const {
+			size_t h = 0;
+			Neat::HashUtils::combine(h, method.object_type, method.name);
+			return h;
+		}
+	};
+
+	template<>
+	struct hash<Neat::BaseClass>
+	{
+		size_t operator()(const Neat::BaseClass& base_class) const noexcept {
+			return base_class.base_id;
+		}
+	};
+}
