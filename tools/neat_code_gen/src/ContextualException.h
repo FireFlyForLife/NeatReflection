@@ -17,9 +17,9 @@ public:
 	ContextualException(std::string message, std::string context);
 	~ContextualException();
 
-	ContextualException(const ContextualException&) = delete;
+	ContextualException(const ContextualException&) = default;
 	ContextualException(ContextualException&&) = default;
-	ContextualException& operator=(const ContextualException&) = delete;
+	ContextualException& operator=(const ContextualException&) = default;
 	ContextualException& operator=(ContextualException&&) = default;
 
 	// Accessors
@@ -46,6 +46,9 @@ private:
 	std::string_view context_fmt;
 	std::tuple<TArgs...> args;
 };
+
+// Waiting room for C++23
+#define UNREACHABLE() throw ContextualException("Unreachable code path has been hit.")
 
 
 // Implementation
@@ -84,7 +87,7 @@ ContextArea<TArgs...>::~ContextArea()
 		}
 		else 
 		{
-			auto format_with_tuple = []<typename... TArgs, size_t... I>(std::string_view fmt, std::tuple<TArgs...>&args, std::index_sequence<I...>)
+			auto format_with_tuple = []<typename... TArgs, size_t... I>(std::string_view fmt, std::tuple<TArgs...>& args, std::index_sequence<I...>)
 			{
 				return std::format(fmt, std::get<I>(args)...);
 			};

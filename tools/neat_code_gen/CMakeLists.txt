@@ -5,26 +5,32 @@
 # 
 # else()
 
+	include(FetchContent)
+
 	# Third party
 	FetchContent_Declare(
 		docopt
 		GIT_REPOSITORY https://github.com/docopt/docopt.cpp.git
 		GIT_TAG v0.6.3
+		FIND_PACKAGE_ARGS
 	)
 	FetchContent_Declare(
 		ifc-reader
 		GIT_REPOSITORY https://github.com/AndreyG/ifc-reader.git
-		GIT_TAG ca45629ce803a022c6a4a78e5631c0f8d6e3549d # Latest at the time of writing
+		GIT_TAG c2cbe58909833b484124c3f6209f712918039d15 # Latest at the time of writing
+		FIND_PACKAGE_ARGS
 	)
 	FetchContent_Declare(
 		magic_enum
 		GIT_REPOSITORY https://github.com/Neargye/magic_enum.git
 		GIT_TAG v0.8.2
+		FIND_PACKAGE_ARGS
 	)
 	FetchContent_Declare(
 		mio
 		GIT_REPOSITORY https://github.com/mandreyel/mio.git
-		GIT_TAG 3f86a95c0784d73ce6815237ec33ed25f233b643 # Latest at the time or writing
+		GIT_TAG 8b6b7d878c89e81614d05edca7936de41ccdd2da # Latest at the time or writing
+		FIND_PACKAGE_ARGS
 	)
 
 	message(STATUS "[NeatReflection] Fetching third party code gen dependencies with FetchContent_MakeAvailable. This might take a few minutes...")
@@ -32,7 +38,7 @@
 
 
 	# Executable
-	add_executable(NeatReflectionCodeGen "src/Main.cpp" "src/CodeGenerator.h" "src/CodeGenerator.cpp" "src/ContextualException.h" "src/ContextualException.cpp")
+	add_executable(NeatReflectionCodeGen "src/Main.cpp" "src/CodeGenerator.h" "src/CodeGenerator.cpp" "src/ContextualException.h" "src/ContextualException.cpp" "src/IfcRendering.h" "src/IfcRendering.cpp" "src/IfcConversion.h" "src/IfcConversion.cpp" "src/StringOperations.h" "src/StringOperations.cpp")
 	target_compile_features(NeatReflectionCodeGen PUBLIC cxx_std_20)
 	target_include_directories(NeatReflectionCodeGen PRIVATE "src")
 	target_link_libraries(NeatReflectionCodeGen PUBLIC NeatReflection docopt_s reflifc magic_enum mio)

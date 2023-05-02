@@ -2,12 +2,15 @@ set(PROJECT_IS_NEAT_REFLECTION CMAKE_PROJECT_NAME STREQUAL "NeatReflection")
 if((PROJECT_IS_NEAT_REFLECTION OR NEAT_REFLECTION_BUILD_TESTING) AND BUILD_TESTING)
 	message(STATUS "[NeatReflection] Configuring NeatReflection tests...")
 
+	include(FetchContent)
+
 
 	# Third party
 	FetchContent_Declare(
 		Catch2
 		GIT_REPOSITORY https://github.com/catchorg/Catch2.git
 		GIT_TAG v3.3.2
+		FIND_PACKAGE_ARGS
 	)
 
 	message(STATUS "[NeatReflection] Fetching third party test dependencies with FetchContent_MakeAvailable. This might take a few minutes...")

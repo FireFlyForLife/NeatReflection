@@ -13,11 +13,16 @@
 #include "ifc/File.h"
 #include "ifc/Environment.h"
 //#include "ifc/MSVCEnvironment.h"
+#include "reflifc/Module.h"
 
 
 constexpr auto USAGE = R"(Usage: 
-    NeatReflectionCodeGen.exe <in_ifc_file> <out_cpp_file>
-    NeatReflectionCodeGen.exe scan <in_dir> <out_dir>)";
+    NeatReflectionCodeGen.exe <in_ifc_file> <out_cpp_file> [--format=<out_format>]
+    NeatReflectionCodeGen.exe scan <in_dir> <out_dir>
+
+Options:
+    --format=<out_format>   The output format. ("NeatReflection", "Json") [default: "NeatReflection"]
+)";
 
 //class MioBlobHolder : public ifc::Environment::BlobHolder
 //{
@@ -74,7 +79,7 @@ bool convert_ifc_file(const std::string& ifc_filename, const std::string& cpp_fi
     }
 
     CodeGenerator code_generator;
-    code_generator.write_cpp_file(reflifc::Module(ifc_file), file_stream);
+    code_generator.write_cpp_file(reflifc::Module{&ifc_file}, file_stream);
 
     return true;
 }
