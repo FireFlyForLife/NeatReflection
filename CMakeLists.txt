@@ -45,12 +45,12 @@ endfunction()
 
 # Sources
 add_library (NeatReflection
-	"include/Neat/Reflection.h"
-	"include/Neat/TemplateTypeId.h"
-	"include/Neat/DllMacro.h" 
-	"include/Neat/ReflectPrivateMembers.h"
-	"src/Neat/Reflection.cpp"
-	"src/Neat/TemplateTypeId.cpp")
+	"include/neat/Reflection.h"
+	"include/neat/TemplateTypeId.h"
+	"include/neat/DllMacro.h" 
+	"include/neat/ReflectPrivateMembers.h"
+	"src/neat/Reflection.cpp"
+	"src/neat/TemplateTypeId.cpp")
 target_compile_features(NeatReflection PUBLIC cxx_std_20)
 target_include_directories(NeatReflection PUBLIC "include")
 target_compile_definitions(NeatReflection PRIVATE BUILDING_REFLECTIONLIB=1) # TODO: Set DLL_REFLECTIONLIB when built as DLL
