@@ -1,5 +1,5 @@
 #pragma once
-#include "Neat/DllMacro.h"
+#include "neat/DllMacro.h"
 
 #include <cstdint>
 

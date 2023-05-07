@@ -1,5 +1,5 @@
 #include "catch2/catch_all.hpp"
-#include "Neat/Reflection.h"
+#include "neat/Reflection.h"
 
 
 struct HashTestTypeBase {};

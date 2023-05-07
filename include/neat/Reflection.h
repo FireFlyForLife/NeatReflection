@@ -1,7 +1,7 @@
 #pragma once
-#include "Neat/DllMacro.h"
-#include "Neat/TemplateTypeId.h"
-#include "Neat/ReflectPrivateMembers.h"
+#include "neat/DllMacro.h"
+#include "neat/TemplateTypeId.h"
+#include "neat/ReflectPrivateMembers.h"
 
 #include <any>
 #include <string>

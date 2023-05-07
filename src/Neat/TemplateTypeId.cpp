@@ -1,4 +1,4 @@
-#include "Neat/TemplateTypeId.h"
+#include "neat/TemplateTypeId.h"
 
 #include <atomic>
 

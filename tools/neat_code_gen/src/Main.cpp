@@ -17,11 +17,8 @@
 
 
 constexpr auto USAGE = R"(Usage: 
-    NeatReflectionCodeGen.exe <in_ifc_file> <out_cpp_file> [--format=<out_format>]
+    NeatReflectionCodeGen.exe <in_ifc_file> <out_cpp_file>
     NeatReflectionCodeGen.exe scan <in_dir> <out_dir>
-
-Options:
-    --format=<out_format>   The output format. ("NeatReflection", "Json") [default: "NeatReflection"]
 )";
 
 //class MioBlobHolder : public ifc::Environment::BlobHolder

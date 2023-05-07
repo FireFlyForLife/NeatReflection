@@ -1,4 +1,4 @@
-#include "Neat/Reflection.h"
+#include "neat/Reflection.h"
 
 #include <unordered_map>
 #include <vector>

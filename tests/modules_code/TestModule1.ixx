@@ -1,5 +1,5 @@
 module;
-#include "Neat/ReflectPrivateMembers.h"
+#include "neat/ReflectPrivateMembers.h"
 #include <string>
 export module TestModule1;
 

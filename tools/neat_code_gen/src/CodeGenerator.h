@@ -1,5 +1,5 @@
 #pragma once
-#include "Neat/Reflection.h"
+#include "neat/Reflection.h"
 
 #include <ostream>
 #include <string>
