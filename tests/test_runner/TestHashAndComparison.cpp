@@ -51,7 +51,7 @@ TEST_CASE("Test std::hash<Neat::Field>")
 	// This makes this a bit of a weak test, as it's directly using the code in the implementation. 
 	// But it's primarily meant so instantiate the functions
 	size_t expected_h = 0;
-	Neat::HashUtils::combine(expected_h, field.type, field.name);
+	Neat::HashUtils::combine(expected_h, field.object_type, field.name);
 
 	CHECK(hash == expected_h);
 }

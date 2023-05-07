@@ -37,11 +37,15 @@
 	FetchContent_MakeAvailable(docopt ifc-reader magic_enum mio)
 
 
+	# Shared Processing Library
+	add_subdirectory("libs/ifc_processing_utilities")
+
+
 	# Executable
-	add_executable(NeatReflectionCodeGen "src/Main.cpp" "src/CodeGenerator.h" "src/CodeGenerator.cpp" "src/ContextualException.h" "src/ContextualException.cpp" "src/IfcRendering.h" "src/IfcRendering.cpp" "src/IfcConversion.h" "src/IfcConversion.cpp" "src/StringOperations.h" "src/StringOperations.cpp")
+	add_executable(NeatReflectionCodeGen "src/Main.cpp" "src/CodeGenerator.h" "src/CodeGenerator.cpp")
 	target_compile_features(NeatReflectionCodeGen PUBLIC cxx_std_20)
 	target_include_directories(NeatReflectionCodeGen PRIVATE "src")
-	target_link_libraries(NeatReflectionCodeGen PUBLIC NeatReflection docopt_s reflifc magic_enum mio)
+	target_link_libraries(NeatReflectionCodeGen PUBLIC NeatReflectionIfcProcessingUtilities docopt_s)
 
 	message(DEBUG "[NeatReflection] Using NeatReflectionCodeGen built from source.")
 	set(NEAT_REFLECTION_CODEGEN_EXE "NeatReflectionCodeGen" PARENT_SCOPE)

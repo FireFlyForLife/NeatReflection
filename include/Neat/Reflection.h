@@ -203,20 +203,7 @@ namespace std
 {
 	template<typename T>
 	struct hash;
-}
 
-namespace Neat::HashUtils
-{
-	template <typename T, typename... Rest>
-	void combine(std::size_t& seed, const T& v, const Rest&... rest)
-	{
-		seed ^= std::hash<T>{}(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-		(combine(seed, rest), ...);
-	}
-}
-
-namespace std
-{
 	template<>
 	struct hash<Neat::Type>
 	{
@@ -240,4 +227,14 @@ namespace std
 	{
 		size_t operator()(const Neat::BaseClass& base_class) const noexcept;
 	};
+}
+
+namespace Neat::HashUtils
+{
+	template <typename T, typename... Rest>
+	void combine(std::size_t& seed, const T& v, const Rest&... rest)
+	{
+		seed ^= std::hash<T>{}(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+		(combine(seed, rest), ...);
+	}
 }

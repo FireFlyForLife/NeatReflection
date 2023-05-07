@@ -103,7 +103,7 @@ namespace std
 	size_t hash<Neat::Field>::operator()(const Neat::Field& field) const 
 	{
 		size_t h = 0;
-		Neat::HashUtils::combine(h, field.type, field.name);
+		Neat::HashUtils::combine(h, field.object_type, field.name);
 		return h;
 	}
 
