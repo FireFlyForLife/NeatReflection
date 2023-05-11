@@ -10,10 +10,17 @@
 #include "reflifc/TupleView.h"
 #include "reflifc/Type.h"
 
+namespace ifc
+{
+	class File;
+	class Environment;
+}
+
+
 class CodeGenerator
 {
 public:
-	CodeGenerator();
+	CodeGenerator(const ifc::File& ifc_file, ifc::Environment& environment);
 
 	void write_cpp_file(reflifc::Module module, std::ostream& out);
 
@@ -29,4 +36,6 @@ private:
 
 private:
 	std::string code;
+	const ifc::File* ifc_file;
+	ifc::Environment* environment;
 };

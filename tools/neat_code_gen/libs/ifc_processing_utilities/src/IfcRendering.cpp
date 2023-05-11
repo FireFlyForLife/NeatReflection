@@ -470,6 +470,8 @@ bool is_type_exported(reflifc::Declaration decl)
 	case ifc::DeclSort::Template:
 		specifiers = decl.as_template().specifiers();
 		break;
+	case ifc::DeclSort::Reference:
+		return false; // TODO: Implement this as part of issue #2
 	default:
 		throw ContextualException(std::format("Unexpected declaration while checking if the type decl was exported. type decl sort: {}",
 			magic_enum::enum_name(decl.sort())));

@@ -32,9 +32,19 @@
 		GIT_TAG 8b6b7d878c89e81614d05edca7936de41ccdd2da # Latest at the time or writing
 		FIND_PACKAGE_ARGS
 	)
+	FetchContent_Declare(
+		nlohmann_json 
+		GIT_REPOSITORY https://github.com/nlohmann/json.git
+		GIT_TAG v3.11.2
+		# NOTE: We don't manually call `FetchContent_MakeAvailable()` with nlohmann_json.
+		# It's intended to be a fallback for when nlohmann_json is not installed yet for the ifc-msvc dependency.
+		OVERRIDE_FIND_PACKAGE
+	)
 
 	message(STATUS "[NeatReflection] Fetching third party code gen dependencies with FetchContent_MakeAvailable. This might take a few minutes...")
 	FetchContent_MakeAvailable(docopt ifc-reader magic_enum mio)
+
+	add_subdirectory("${ifc-reader_SOURCE_DIR}/lib/msvc" "${ifc-reader_BINARY_DIR}/lib/msvc")
 
 
 	# Shared Processing Library
@@ -45,7 +55,8 @@
 	add_executable(NeatReflectionCodeGen "src/Main.cpp" "src/CodeGenerator.h" "src/CodeGenerator.cpp")
 	target_compile_features(NeatReflectionCodeGen PUBLIC cxx_std_20)
 	target_include_directories(NeatReflectionCodeGen PRIVATE "src")
-	target_link_libraries(NeatReflectionCodeGen PUBLIC NeatReflectionIfcProcessingUtilities docopt_s)
+	target_link_libraries(NeatReflectionCodeGen PUBLIC NeatReflectionIfcProcessingUtilities docopt_s ifc-msvc)
+	set_target_properties(NeatReflectionCodeGen PROPERTIES FOLDER "Neat/Tools")
 
 	message(DEBUG "[NeatReflection] Using NeatReflectionCodeGen built from source.")
 	set(NEAT_REFLECTION_CODEGEN_EXE "NeatReflectionCodeGen" PARENT_SCOPE)

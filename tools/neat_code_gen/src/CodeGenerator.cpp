@@ -5,7 +5,6 @@
 #include "StringOperations.h"
 
 #include <format>
-#include <cassert>
 #include <cctype>
 #include <algorithm>
 #include <iostream>
@@ -29,10 +28,15 @@
 #include "reflifc/type/Reference.h"
 
 #include "ifc/Expression.h"
+#include "ifc/File.h"
+#include "ifc/Environment.h"
 
 #include "magic_enum.hpp"
 
-CodeGenerator::CodeGenerator()
+
+CodeGenerator::CodeGenerator(const ifc::File& ifc_file, ifc::Environment& environment)
+	: ifc_file(&ifc_file)
+	, environment(&environment)
 {
 	code.reserve(1024);
 }
@@ -193,19 +197,14 @@ std::string CodeGenerator::render_bases(reflifc::ClassOrStruct scope_decl)
 
 	auto bases = scope_decl.bases();
 
-	const auto render_base = [this, default_access] (reflifc::BaseType base_type) -> std::string
-	{
-		auto access_string = render_as_neat_access_enum(base_type.access, default_access);
-		auto type_name = render_full_typename(base_type.type);
-		return std::format(R"(BaseClass{{ get_id<{0}>(), {1} }}, )", type_name, access_string);
-	};
-
 	std::string rendered;
 	rendered.reserve(bases.size() * 16);
 
 	for (auto type : bases)
 	{
-		rendered += render_base(type);
+		auto access_string = render_as_neat_access_enum(type.access, default_access);
+		auto type_name = render_full_typename(type.type);
+		rendered += std::format(R"(BaseClass{{ get_id<{0}>(), {1} }}, )", type_name, access_string);
 	}
 
 	return rendered;

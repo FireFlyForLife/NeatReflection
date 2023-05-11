@@ -2,6 +2,8 @@
 
 #include <ContextualException.h>
 
+#include "MioBlobHolder.h"
+
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -9,10 +11,9 @@
 #include <span>
 
 #include "docopt.h"
-#include "mio/mmap.hpp"
 #include "ifc/File.h"
 #include "ifc/Environment.h"
-//#include "ifc/MSVCEnvironment.h"
+#include "ifc/MSVCEnvironment.h"
 #include "reflifc/Module.h"
 
 
@@ -20,27 +21,6 @@ constexpr auto USAGE = R"(Usage:
     NeatReflectionCodeGen.exe <in_ifc_file> <out_cpp_file>
     NeatReflectionCodeGen.exe scan <in_dir> <out_dir>
 )";
-
-//class MioBlobHolder : public ifc::Environment::BlobHolder
-//{
-//public:
-//    MioBlobHolder(const std::filesystem::path& path)
-//        : memory_mapped_file(path)
-//    {}
-//
-//    static ifc::Environment::BlobHolderPtr create_unique(const std::filesystem::path& path)
-//    {
-//        return std::make_unique<MioBlobHolder>(path);
-//    }
-//
-//    ifc::File::BlobView view() const override
-//    {
-//        return std::as_bytes(std::span{ memory_mapped_file.data(), memory_mapped_file.size() });
-//    }
-//
-//private:
-//    mio::mmap_source memory_mapped_file;
-//};
 
 bool convert_ifc_file(const std::string& ifc_filename, const std::string& cpp_filename) try
 {
@@ -57,12 +37,11 @@ bool convert_ifc_file(const std::string& ifc_filename, const std::string& cpp_fi
         return false;
     }
 
-    mio::mmap_source mmapped_file{ ifc_filename };
-    auto file_bytes = std::as_bytes(std::span{ mmapped_file.data(), mmapped_file.size() });
+    MioBlobHolder ifc_file_blob{ ifc_filename };
+    ifc::File ifc_file{ ifc_file_blob.view() };
 
-    //ifc::Environment environment{ ifc::read_msvc_config(ifc_filename + ".d.json"), &MioBlobHolder::create_unique };
-    ifc::File ifc_file{ file_bytes };
-
+    ifc::Environment environment{ ifc::read_msvc_config(ifc_filename + ".d.json"), &MioBlobHolder::create_unique };
+   
     std::ofstream file_stream{ cpp_filename, std::ofstream::out | std::ofstream::trunc };
     if (!file_stream.good())
     {
@@ -75,7 +54,7 @@ bool convert_ifc_file(const std::string& ifc_filename, const std::string& cpp_fi
         return false;
     }
 
-    CodeGenerator code_generator;
+    CodeGenerator code_generator{ ifc_file, environment };
     code_generator.write_cpp_file(reflifc::Module{&ifc_file}, file_stream);
 
     return true;
