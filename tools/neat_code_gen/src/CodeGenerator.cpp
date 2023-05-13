@@ -120,14 +120,14 @@ void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declarat
 
 void CodeGenerator::render(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl)
 {
-	if(!is_type_exported(decl))
+	if(!is_type_exported(decl, *environment))
 	{
 		return;
 	}
 
-	const auto type_name = render_namespace(decl) + scope_decl.name().as_identifier();
+	const auto type_name = render_namespace(decl, *environment) + scope_decl.name().as_identifier();
 	const auto var_name = to_snake_case(type_name) + '_';
-	const bool reflect_privates = reflects_private_members(decl);
+	const bool reflect_privates = reflects_private_members(decl, *environment);
 	const auto [fields, methods] = render_members(type_name, var_name, scope_decl, reflect_privates);
 	const auto bases = render_bases(scope_decl);
 
@@ -152,11 +152,11 @@ CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_n
 		case ifc::DeclSort::Field:
 		{
 			const auto field = decl.as_field();
-			const auto type = render_full_typename(field.type());
+			const auto type = render_full_typename(field.type(), *environment);
 			const auto name = field.name();
 			const auto access = render_as_neat_access_enum(field.access(), "Access::...");
 
-			if (is_member_publicly_accessible(field, scope_decl.kind(), reflect_private_members))
+			if (is_member_publicly_accessible(field, scope_decl.kind(), reflect_private_members, *environment))
 			{
 				fields += std::format(R"(Field::create<{0}, {1}, &{0}::{2}>("{2}", {3}), )", type_name, type, name, access);
 			}
@@ -166,19 +166,19 @@ CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_n
 		{
 			const auto method = decl.as_method();
 			const auto method_type = method.type();
-			const auto return_type = render_full_typename(method_type.return_type());
+			const auto return_type = render_full_typename(method_type.return_type(), *environment);
 			auto params = method_type.parameters();
 			auto param_types = std::string{ "" };
 			param_types.reserve(params.size() * 8);
 			for (auto param : params)
 			{
 				param_types += ", ";
-				param_types += render_full_typename(param);
+				param_types += render_full_typename(param, *environment);
 			}
 			const auto name = method.name().as_identifier();
 			const auto access = render_as_neat_access_enum(method.access());
 
-			if (is_member_publicly_accessible(method, scope_decl.kind(), reflect_private_members))
+			if (is_member_publicly_accessible(method, scope_decl.kind(), reflect_private_members, *environment))
 			{
 				methods += std::format(R"(Method::create<&{0}::{3}, {0}, {1}{2}>("{3}", {4}), )", type_name, return_type, param_types, name, access);
 			}
@@ -203,7 +203,7 @@ std::string CodeGenerator::render_bases(reflifc::ClassOrStruct scope_decl)
 	for (auto type : bases)
 	{
 		auto access_string = render_as_neat_access_enum(type.access, default_access);
-		auto type_name = render_full_typename(type.type);
+		auto type_name = render_full_typename(type.type, *environment);
 		rendered += std::format(R"(BaseClass{{ get_id<{0}>(), {1} }}, )", type_name, access_string);
 	}
 

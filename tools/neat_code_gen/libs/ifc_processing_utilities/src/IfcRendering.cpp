@@ -10,6 +10,7 @@
 #include "reflifc/decl/AliasDeclaration.h"
 #include "reflifc/decl/ClassOrStruct.h"
 #include "reflifc/decl/Concept.h"
+#include "reflifc/decl/DeclarationReference.h"
 #include "reflifc/decl/Enumeration.h"
 #include "reflifc/decl/Function.h"
 #include "reflifc/decl/Intrinsic.h"
@@ -29,7 +30,7 @@
 #include <format>
 
 
-std::string render_full_typename(reflifc::Type type)
+std::string render_full_typename(reflifc::Type type, ifc::Environment& environment)
 {
 	switch (type.sort())
 	{
@@ -38,28 +39,27 @@ std::string render_full_typename(reflifc::Type type)
 	case ifc::TypeSort::Designated:
 	{
 		const auto designated_declaration = type.designation();
-		return render_namespace(designated_declaration) + render_refered_declaration(designated_declaration);
+		return render_namespace(designated_declaration, environment) + render_refered_declaration(designated_declaration, environment);
 	}
 	case ifc::TypeSort::Pointer:
-		return render_full_typename(type.as_pointer().pointee) + "*";
+		return render_full_typename(type.as_pointer().pointee, environment) + "*";
 	case ifc::TypeSort::LvalueReference:
-		return render_full_typename(type.as_lvalue_reference().referee) + "&";
+		return render_full_typename(type.as_lvalue_reference().referee, environment) + "&";
 	case ifc::TypeSort::RvalueReference:
-		return render_full_typename(type.as_rvalue_reference().referee) + "&&";
+		return render_full_typename(type.as_rvalue_reference().referee, environment) + "&&";
 	case ifc::TypeSort::Qualified:
-		return render_full_typename(type.as_qualified().unqualified()) +
+		return render_full_typename(type.as_qualified().unqualified(), environment) +
 			render_qualifiers(type.as_qualified().qualifiers());
 	case ifc::TypeSort::Placeholder:
 		if (auto elaborated_type = type.as_placeholder().elaboration())
 		{
-			return render_full_typename(elaborated_type);
+			return render_full_typename(elaborated_type, environment);
 		}
-		assert(false && "IFC doesn't contain deduced type");
-		return "PLACEHOLDER_TYPE";
+		throw ContextualException("IFC Doesn't contain deduced type for placeholder to be rendered with render_full_typename()");
 	case ifc::TypeSort::Function: // U (*)(Args...);
-		return render_full_typename(type.as_function());
+		return render_full_typename(type.as_function(), environment);
 	case ifc::TypeSort::Syntactic:
-		return render_full_typename(type.as_syntactic());
+		return render_full_typename(type.as_syntactic(), environment);
 
 		// Currently unsupported
 	case ifc::TypeSort::Expansion: // variadic pack expansion (...)
@@ -82,9 +82,9 @@ std::string render_full_typename(reflifc::Type type)
 	}
 }
 
-std::string render_full_typename(reflifc::FunctionType function_type) // U (*)(Args...);
+std::string render_full_typename(reflifc::FunctionType function_type, ifc::Environment& environment) // U (*)(Args...);
 {
-	auto return_type = render_full_typename(function_type.return_type());
+	auto return_type = render_full_typename(function_type.return_type(), environment);
 	std::string parameter_types;
 	auto params = function_type.parameters();
 	parameter_types.reserve(params.size() * 8);
@@ -95,7 +95,7 @@ std::string render_full_typename(reflifc::FunctionType function_type) // U (*)(A
 			first = false;
 		else
 			parameter_types += ", ";
-		parameter_types += render_full_typename(param);
+		parameter_types += render_full_typename(param, environment);
 	}
 	return return_type + " (" + parameter_types + ")";
 }
@@ -177,23 +177,23 @@ std::string render_full_typename(const ifc::FundamentalType& type)
 }
 
 
-std::string render_full_typename(reflifc::TemplateId template_id)
+std::string render_full_typename(reflifc::TemplateId template_id, ifc::Environment& environment)
 {
 	return std::format("{}<{}>",
-		render_full_typename(template_id.primary()),
-		render_full_typename(template_id.arguments()));
+		render_full_typename(template_id.primary(), environment),
+		render_full_typename(template_id.arguments(), environment));
 }
 
-std::string render_full_typename(reflifc::Expression expr)
+std::string render_full_typename(reflifc::Expression expr, ifc::Environment& environment)
 {
 	switch (expr.sort())
 	{
 	case ifc::ExprSort::NamedDecl:
-		return render_full_typename(expr.referenced_decl());
+		return render_full_typename(expr.referenced_decl(), environment);
 	case ifc::ExprSort::Type:
-		return render_full_typename(expr.as_type());
+		return render_full_typename(expr.as_type(), environment);
 	case ifc::ExprSort::TemplateId:
-		return render_full_typename(expr.as_template_id());
+		return render_full_typename(expr.as_template_id(), environment);
 	case ifc::ExprSort::Empty:
 		return "";
 
@@ -204,7 +204,7 @@ std::string render_full_typename(reflifc::Expression expr)
 	}
 }
 
-std::string render_full_typename(reflifc::TupleExpressionView tuple)
+std::string render_full_typename(reflifc::TupleExpressionView tuple, ifc::Environment& environment)
 {
 	std::string rendered;
 	rendered.reserve(tuple.size() * 8); // Preallocate a reasonable amount
@@ -217,16 +217,16 @@ std::string render_full_typename(reflifc::TupleExpressionView tuple)
 			rendered += ", ";
 		}
 
-		rendered += render_full_typename(expression);
+		rendered += render_full_typename(expression, environment);
 
 		first = false;
 	}
 	return rendered;
 }
 
-std::string render_full_typename(reflifc::Declaration decl)
+std::string render_full_typename(reflifc::Declaration decl, ifc::Environment& environment)
 {
-	return render_namespace(decl) + render_refered_declaration(decl);
+	return render_namespace(decl, environment) + render_refered_declaration(decl, environment);
 }
 
 std::string render_qualifiers(ifc::Qualifiers qualifiers)
@@ -259,7 +259,7 @@ std::string render_qualifiers(ifc::Qualifiers qualifiers)
 
 
 
-std::string render_refered_declaration(reflifc::Declaration decl)
+std::string render_refered_declaration(reflifc::Declaration decl, ifc::Environment& environment)
 {
 	switch (const auto kind = decl.sort())
 	{
@@ -268,50 +268,47 @@ std::string render_refered_declaration(reflifc::Declaration decl)
 		reflifc::Parameter param = decl.as_parameter();
 		return param.name();
 	}
-	break;
 	case ifc::DeclSort::Scope:
 	{
 		reflifc::ScopeDeclaration scope = decl.as_scope();
 		return scope.name().as_identifier();
 	}
-	break;
 	case ifc::DeclSort::Template:
 	{
 		reflifc::TemplateDeclaration template_declaration = decl.as_template();
 		return template_declaration.name().as_identifier();
 	}
-	break;
 	case ifc::DeclSort::Function:
 	{
 		reflifc::Function function = decl.as_function();
 		return function.name().as_identifier();
 	}
-	break;
-	//case ifc::DeclSort::Reference:
-	//	return std::string{ get_user_type_name(file, file.decl_references()[decl_index]) };
-	//	break;
+	case ifc::DeclSort::Reference:
+	{
+		auto referenced_declaration = decl.as_reference().referenced_declaration(environment);
+		return render_refered_declaration(referenced_declaration, environment);
+	}
 	case ifc::DeclSort::Enumeration:
 	{
 		auto enumeration = decl.as_enumeration();
 		return enumeration.name();
 	}
-	break;
 	default:
-		assert(false && "Unsupported declsort");
-		return std::format("<UNEXPECTED_DECLSORT {}>", magic_enum::enum_name(kind));
+		throw ContextualException(std::format("Cannot render a refered declaration with unsupported DeclSort: {}.", 
+			magic_enum::enum_name(kind)));
 	}
 }
 
-std::string render_namespace(reflifc::Declaration decl)
+std::string render_namespace(reflifc::Declaration decl, ifc::Environment& environment)
 {
-	reflifc::Declaration home_scope = get_home_scope(decl);
+	reflifc::Declaration home_scope = get_home_scope(decl, environment);
 
 	if (!home_scope) {
 		return "";
 	}
 
 	// Recursive call
-	auto rendered_namespace = render_namespace(home_scope) + render_refered_declaration(home_scope);
+	auto rendered_namespace = render_namespace(home_scope, environment) + render_refered_declaration(home_scope, environment);
 
 	if (rendered_namespace.empty()) {
 		return "";
@@ -347,9 +344,9 @@ std::string render_neat_access_enum(Neat::Access access)
 	}
 }
 
-bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBasis type, bool reflects_private_members)
+bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBasis type, bool reflects_private_members, ifc::Environment& environment)
 {
-	if (!is_type_exported(field_declaration.type()))
+	if (!is_type_exported(field_declaration.type(), environment))
 	{
 		return false;
 	}
@@ -374,9 +371,9 @@ bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBa
 	return (member_access == Neat::Access::Public || reflects_private_members);
 }
 
-bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::TypeBasis type, bool reflects_private_members)
+bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::TypeBasis type, bool reflects_private_members, ifc::Environment& environment)
 {
-	if (!is_type_exported(method_declaration.type()))
+	if (!is_type_exported(method_declaration.type(), environment))
 	{
 		return false;
 	}
@@ -401,7 +398,7 @@ bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::Type
 	return (member_access == Neat::Access::Public || reflects_private_members);
 }
 
-bool reflects_private_members(reflifc::Declaration type_decl)
+bool reflects_private_members(reflifc::Declaration type_decl, ifc::Environment& environment)
 {
 	for (auto expr_index : type_decl.friends())
 	{
@@ -414,8 +411,8 @@ bool reflects_private_members(reflifc::Declaration type_decl)
 				return false;
 
 			// TODO OPT: Don't require allocations for these comparisons.
-			auto friend_name = render_namespace(named_decl) + render_refered_declaration(named_decl);
-			auto rendered_type = render_full_typename(named_decl.as_function().type());
+			auto friend_name = render_namespace(named_decl, environment) + render_refered_declaration(named_decl, environment);
+			auto rendered_type = render_full_typename(named_decl.as_function().type(), environment);
 			return friend_name == "Neat::reflect_private_members"
 				&& rendered_type == "void ()";
 		}
@@ -431,31 +428,31 @@ bool reflects_private_members(reflifc::Declaration type_decl)
 	return false;
 }
 
-bool is_type_exported(reflifc::Type type)
+bool is_type_exported(reflifc::Type type, ifc::Environment& environment)
 {
 	switch (type.sort())
 	{
 	case ifc::TypeSort::Fundamental:
 		return true;
 	case ifc::TypeSort::Designated:
-		return is_type_exported(type.designation());
+		return is_type_exported(type.designation(), environment);
 	case ifc::TypeSort::Syntactic:
-		return is_type_exported(type.as_syntactic());
+		return is_type_exported(type.as_syntactic(), environment);
 	case ifc::TypeSort::Method:
-		return is_type_exported(type.as_method());
+		return is_type_exported(type.as_method(), environment);
 	default:
 		throw ContextualException(std::format("Unexpected type while checking if the type was exported. type sort: {}",
 			magic_enum::enum_name(type.sort())));
 	}
 }
 
-bool is_type_exported(reflifc::MethodType method)
+bool is_type_exported(reflifc::MethodType method, ifc::Environment& environment)
 {
-	return is_type_exported(method.return_type()) &&
-		std::ranges::all_of(method.parameters(), [](reflifc::Type type) { return is_type_exported(type); });
+	return is_type_exported(method.return_type(), environment) &&
+		std::ranges::all_of(method.parameters(), [&environment](reflifc::Type type) { return is_type_exported(type, environment); });
 }
 
-bool is_type_exported(reflifc::Declaration decl)
+bool is_type_exported(reflifc::Declaration decl, ifc::Environment& environment)
 {
 	ifc::BasicSpecifiers specifiers{};
 
@@ -471,7 +468,7 @@ bool is_type_exported(reflifc::Declaration decl)
 		specifiers = decl.as_template().specifiers();
 		break;
 	case ifc::DeclSort::Reference:
-		return false; // TODO: Implement this as part of issue #2
+		return is_type_exported(decl.as_reference().referenced_declaration(environment), environment);
 	default:
 		throw ContextualException(std::format("Unexpected declaration while checking if the type decl was exported. type decl sort: {}",
 			magic_enum::enum_name(decl.sort())));
@@ -481,16 +478,16 @@ bool is_type_exported(reflifc::Declaration decl)
 	return (magic_enum::enum_underlying(specifiers & ifc::BasicSpecifiers::NonExported) == 0);
 }
 
-bool is_type_exported(reflifc::Expression expr)
+bool is_type_exported(reflifc::Expression expr, ifc::Environment& environment)
 {
 	switch (expr.sort())
 	{
 	case ifc::ExprSort::NamedDecl:
-		return is_type_exported(expr.referenced_decl());
+		return is_type_exported(expr.referenced_decl(), environment);
 	case ifc::ExprSort::Type:
-		return is_type_exported(expr.as_type());
+		return is_type_exported(expr.as_type(), environment);
 	case ifc::ExprSort::TemplateId:
-		return is_type_exported(expr.as_template_id());
+		return is_type_exported(expr.as_template_id(), environment);
 	case ifc::ExprSort::Empty:
 		return false;
 
@@ -510,16 +507,16 @@ bool is_type_exported(reflifc::Expression expr)
 	}
 }
 
-bool is_type_exported(reflifc::TemplateId template_id)
+bool is_type_exported(reflifc::TemplateId template_id, ifc::Environment& environment)
 {
-	return is_type_exported(template_id.primary()) &&
-		std::ranges::all_of(template_id.arguments(), [](reflifc::Expression arg)
+	return is_type_exported(template_id.primary(), environment) &&
+		std::ranges::all_of(template_id.arguments(), [&environment](reflifc::Expression arg)
 			{
-				return is_type_exported(arg);
+				return is_type_exported(arg, environment);
 			});
 }
 
-reflifc::Declaration get_home_scope(const reflifc::Declaration& decl)
+reflifc::Declaration get_home_scope(const reflifc::Declaration& decl, ifc::Environment& environment)
 {
 	switch (const auto sort = decl.sort())
 	{
@@ -549,11 +546,12 @@ reflifc::Declaration get_home_scope(const reflifc::Declaration& decl)
 		return decl.as_destructor().home_scope();
 	case ifc::DeclSort::UsingDeclaration:
 		return decl.as_using().home_scope();
+	case ifc::DeclSort::Reference: // Reference to an external module's declaration
+		return get_home_scope(decl.as_reference().referenced_declaration(environment), environment);
 
 		// Currently unsupported:
 	case ifc::DeclSort::Bitfield:
 	case ifc::DeclSort::PartialSpecialization:
-	case ifc::DeclSort::Reference: // Reference to an external module's declaration
 	case ifc::DeclSort::InheritedConstructor:
 
 		// Unable to get a home_scope for these:
