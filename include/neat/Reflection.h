@@ -53,7 +53,7 @@ namespace Neat
 		std::vector<Method> methods;
 
 		// Operators
-		bool operator==(const Type& other) const noexcept;
+		bool operator==(const Type& other) const noexcept = default;
 		std::strong_ordering operator<=>(const Type& other) const noexcept;
 	};
 

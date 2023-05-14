@@ -67,7 +67,12 @@ TEST_CASE("Test std::hash<Neat::Method>")
 	// This makes this a bit of a weak test, as it's directly using the code in the implementation. 
 	// But it's primarily meant so instantiate the functions
 	size_t expected_h = 0;
-	Neat::HashUtils::combine(expected_h, method.object_type, method.name);
+
+	for (const auto& argument_type : method.argument_types)
+	{
+		Neat::HashUtils::combine(expected_h, argument_type);
+	}
+	Neat::HashUtils::combine(expected_h, method.object_type, method.return_type, method.name);
 
 	CHECK(hash == expected_h);
 }

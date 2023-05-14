@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <vector>
 #include <string>
+#include <functional>
 
 
 namespace Neat
@@ -28,7 +29,7 @@ namespace Neat
 		return type_container.types.back();
 	}
 
-	std::span<Type> Neat::get_types()
+	std::span<Type> get_types()
 	{
 		return { type_container.types.begin(), type_container.types.end() };
 	}
@@ -54,23 +55,16 @@ namespace Neat
 	}
 
 
-	bool Type::operator==(const Type& other) const noexcept
-	{
-		return id == other.id;
-	}
-
 	std::strong_ordering Type::operator<=>(const Type& other) const noexcept
 	{
-		// We cannot simply compare `id` like operator==
-		// Because the id generation is not stable between runs.
-		return name <=> other.name;
+		return id <=> other.id;
 	}
 
 	std::strong_ordering Field::operator<=>(const Field& other) const noexcept
 	{
 		std::strong_ordering order;
 
-		order = (object_type <=> other.object_type); // TODO: This id could cause trouble
+		order = (object_type <=> other.object_type);
 		if (order != 0) { return order; }
 		order = (name <=> other.name);
 
@@ -81,7 +75,7 @@ namespace Neat
 	{
 		std::strong_ordering order;
 
-		order = (object_type <=> other.object_type); // TODO: This id could cause trouble
+		order = (object_type <=> other.object_type);
 		if (order != 0) { return order; }
 		order = (return_type <=> other.return_type);
 		if (order != 0) { return order; }
@@ -110,7 +104,13 @@ namespace std
 	size_t hash<Neat::Method>::operator()(const Neat::Method& method) const 
 	{
 		size_t h = 0;
-		Neat::HashUtils::combine(h, method.object_type, method.name);
+
+		for (const auto& argument_type : method.argument_types)
+		{
+			Neat::HashUtils::combine(h, argument_type);
+		}
+		Neat::HashUtils::combine(h, method.object_type, method.return_type, method.name);
+
 		return h;
 	}
 
