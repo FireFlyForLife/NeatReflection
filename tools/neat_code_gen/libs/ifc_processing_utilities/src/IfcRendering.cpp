@@ -559,8 +559,8 @@ reflifc::Declaration get_home_scope(const reflifc::Declaration& decl, ifc::Envir
 	case ifc::DeclSort::VendorExtension:
 	case ifc::DeclSort::Enumerator:
 	case ifc::DeclSort::Temploid:
-	case ifc::DeclSort::ExplicitSpecialization:
-	case ifc::DeclSort::ExplicitInstantiation:
+	//case ifc::DeclSort::ExplicitSpecialization: // Not implemented in ifc-reader
+	//case ifc::DeclSort::ExplicitInstantiation: // Not implemented in ifc-reader
 	case ifc::DeclSort::UsingDirective:
 	case ifc::DeclSort::Friend:
 	case ifc::DeclSort::Expansion:

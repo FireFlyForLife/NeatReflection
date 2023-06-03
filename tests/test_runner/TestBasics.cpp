@@ -15,9 +15,9 @@ void test_contains_type(std::string_view type_name)
 {
 	using namespace std::string_view_literals;
 
-	Neat::Type* base_type_by_name = Neat::get_type(type_name);
-	Neat::Type* base_type_by_id = Neat::get_type(Neat::get_id<T>());
-	Neat::Type* base_type_by_template = Neat::get_type<T>();
+	const Neat::Type* base_type_by_name = Neat::get_type(type_name);
+	const Neat::Type* base_type_by_id = Neat::get_type(Neat::get_id<T>());
+	const Neat::Type* base_type_by_template = Neat::get_type<T>();
 
 	CHECK(base_type_by_name != nullptr);
 	CHECK(base_type_by_id != nullptr);
@@ -56,7 +56,7 @@ TEST_CASE("Types have correct data")
 	using namespace std::string_view_literals;
 
 	SECTION("MyBaseStruct") {
-		Neat::Type* base_type = Neat::get_type("MyBaseStruct"sv); // get the Id afterwards, so search by name
+		const Neat::Type* base_type = Neat::get_type("MyBaseStruct"sv); // get the Id afterwards, so search by name
 		REQUIRE(base_type != nullptr);
 
 		CHECK(base_type->name == "MyBaseStruct");
@@ -68,7 +68,7 @@ TEST_CASE("Types have correct data")
 	}
 	
 	SECTION("MyStruct") {
-		Neat::Type* type = Neat::get_type(Neat::get_id<MyStruct>()); // get the Id beforehand
+		const Neat::Type* type = Neat::get_type(Neat::get_id<MyStruct>()); // get the Id beforehand
 		REQUIRE(type != nullptr);
 
 		CHECK(type->name == "MyStruct");
@@ -84,7 +84,7 @@ TEST_CASE("Types have correct data")
 	}
 
 	SECTION("MyClass") {
-		Neat::Type* type = Neat::get_type<MyClass>();
+		const Neat::Type* type = Neat::get_type<MyClass>();
 		REQUIRE(type != nullptr);
 
 		CHECK(type->name == "MyClass");
@@ -98,12 +98,12 @@ TEST_CASE("Types have correct data")
 	}
 
 	SECTION("NonExportedClass") {
-		Neat::Type* type = Neat::get_type("NonExportedClass");
+		const Neat::Type* type = Neat::get_type("NonExportedClass");
 		CHECK(type == nullptr);
 	}
 
 	SECTION("ClassWithUnreflectedPrivates") {
-		Neat::Type* type = Neat::get_type<ClassWithUnreflectedPrivates>();
+		const Neat::Type* type = Neat::get_type<ClassWithUnreflectedPrivates>();
 		REQUIRE(type != nullptr);
 
 		CHECK(type->name == "ClassWithUnreflectedPrivates");
@@ -114,7 +114,7 @@ TEST_CASE("Types have correct data")
 	}
 	
 	SECTION("MyBaseStruct2") {
-		Neat::Type* type = Neat::get_type<MyBaseStruct2>();
+		const Neat::Type* type = Neat::get_type<MyBaseStruct2>();
 		REQUIRE(type != nullptr);
 
 		CHECK(type->name == "MyBaseStruct2");
@@ -126,7 +126,7 @@ TEST_CASE("Types have correct data")
 	}
 	
 	SECTION("MyStruct2") {
-		Neat::Type* type = Neat::get_type<MyStruct2>();
+		const Neat::Type* type = Neat::get_type<MyStruct2>();
 		REQUIRE(type != nullptr);
 
 		CHECK(type->name == "MyStruct2");
@@ -146,7 +146,7 @@ TEST_CASE("Types have correct data")
 TEST_CASE("Namespaced types have correct data")
 {
 	SECTION("ExportedNamespace::StillExportedClass") {
-		Neat::Type* type = Neat::get_type<ExportedNamespace::StillExportedClass>();
+		const Neat::Type* type = Neat::get_type<ExportedNamespace::StillExportedClass>();
 		REQUIRE(type != nullptr);
 
 		CHECK(type->name == "ExportedNamespace::StillExportedClass");
@@ -157,7 +157,7 @@ TEST_CASE("Namespaced types have correct data")
 	}
 
 	SECTION("NormalNamespace::ExplicitlyExportedClass") {
-		Neat::Type* type = Neat::get_type<NormalNamespace::ExplicitlyExportedClass>();
+		const Neat::Type* type = Neat::get_type<NormalNamespace::ExplicitlyExportedClass>();
 		REQUIRE(type != nullptr);
 
 		CHECK(type->name == "NormalNamespace::ExplicitlyExportedClass");
@@ -168,7 +168,7 @@ TEST_CASE("Namespaced types have correct data")
 	}
 
 	SECTION("NormalNamespace::NotExportedClass") {
-		Neat::Type* type = Neat::get_type("NormalNamespace::NotExportedClass");
+		const Neat::Type* type = Neat::get_type("NormalNamespace::NotExportedClass");
 		CHECK(type == nullptr);
 	}
 }
@@ -178,16 +178,16 @@ TEST_CASE("Read field values")
 	SECTION("MyBaseStruct") {
 		MyBaseStruct my_struct{ .health = 7 };
 
-		Neat::Type* type = Neat::get_type<MyBaseStruct>();
+		const Neat::Type* type = Neat::get_type<MyBaseStruct>();
 		REQUIRE(type != nullptr);
 
 		REQUIRE(!type->fields.empty());
 		auto& field = type->fields[0];
 		REQUIRE(field.name == "health");
 
-		auto value = field.get_value(&my_struct);
+		auto value = field.get_reference(&my_struct);
 		REQUIRE(value.has_value());
-		auto value_int = std::any_cast<int>(&value);
+		auto value_int = std::any_cast<std::reference_wrapper<int>>(&value);
 		REQUIRE(value_int != nullptr);
 		
 		REQUIRE(*value_int == 7);
@@ -196,16 +196,16 @@ TEST_CASE("Read field values")
 	SECTION("MyStruct") {
 		MyStruct my_struct{ .damage = 42.0 };
 
-		Neat::Type* type = Neat::get_type<MyStruct>();
+		const Neat::Type* type = Neat::get_type<MyStruct>();
 		REQUIRE(type != nullptr);
 
 		REQUIRE(!type->fields.empty());
 		auto& field = type->fields[0];
 		REQUIRE(field.name == "damage");
 
-		auto value = field.get_value(&my_struct);
+		auto value = field.get_reference(&my_struct);
 		REQUIRE(value.has_value());
-		auto value_double = std::any_cast<double>(&value);
+		auto value_double = std::any_cast<std::reference_wrapper<double>>(&value);
 		REQUIRE(value_double != nullptr);
 
 		REQUIRE(*value_double == Catch::Approx(42.0));
@@ -217,7 +217,7 @@ TEST_CASE("Write field values")
 	SECTION("MyBaseStruct") {
 		MyBaseStruct my_struct{ .health = 0 };
 
-		Neat::Type* type = Neat::get_type<MyBaseStruct>();
+		const Neat::Type* type = Neat::get_type<MyBaseStruct>();
 		REQUIRE(type != nullptr);
 
 		REQUIRE(!type->fields.empty());
@@ -234,7 +234,7 @@ TEST_CASE("Write field values")
 	SECTION("MyStruct") {
 		MyStruct my_struct{ .damage = 0.0 };
 
-		Neat::Type* type = Neat::get_type<MyStruct>();
+		const Neat::Type* type = Neat::get_type<MyStruct>();
 		REQUIRE(type != nullptr);
 
 		REQUIRE(!type->fields.empty());
@@ -253,7 +253,7 @@ TEST_CASE("Invoke method")
 {
 	MyStruct my_struct{ .damage = -5.0 };
 
-	Neat::Type* type = Neat::get_type<MyStruct>();
+	const Neat::Type* type = Neat::get_type<MyStruct>();
 	REQUIRE(type != nullptr);
 
 	REQUIRE(type->methods.size() == 3);

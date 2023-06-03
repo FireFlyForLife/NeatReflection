@@ -1,0 +1,11 @@
+add_library(NeatReflectionExample_Simple "simple_example.ixx")
+target_compile_features(NeatReflectionExample_Simple PUBLIC cxx_std_20)
+target_link_libraries(NeatReflectionExample_Simple PUBLIC NeatReflection)
+set_target_properties(NeatReflectionExample_Simple PROPERTIES FOLDER "Neat/Examples")
+
+add_reflection_target(NeatReflectionExample_Simple_ReflectionData NeatReflectionExample_Simple)
+
+add_executable(NeatReflectionExample_SimpleRunner "simple_example_runner.cpp")
+target_compile_features(NeatReflectionExample_SimpleRunner PUBLIC cxx_std_20)
+target_link_libraries(NeatReflectionExample_SimpleRunner PUBLIC NeatReflectionExample_Simple NeatReflectionExample_Simple_ReflectionData)
+set_target_properties(NeatReflectionExample_SimpleRunner PROPERTIES FOLDER "Neat/Examples")

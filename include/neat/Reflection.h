@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 #include <type_traits>
+#include <functional> // Only for std::reference_wrapper<T>
 #include <span>
 #include <compare>
 #include <cassert>
@@ -31,11 +32,11 @@ namespace Neat
 
 	REFL_API Type& add_type(Type&&);
 
-	REFL_API std::span<Type> get_types();
-	REFL_API Type* get_type(std::string_view type_name);
-	REFL_API Type* get_type(TemplateTypeId type_id);
+	REFL_API std::span<const Type> get_types();
+	REFL_API const Type* get_type(std::string_view type_name);
+	REFL_API const Type* get_type(TemplateTypeId type_id);
 	template<typename T> 
-	Type* get_type() { return get_type(get_id<T>()); }
+	const Type* get_type() { return get_type(get_id<T>()); }
 
 
 	// Types
@@ -45,6 +46,15 @@ namespace Neat
 
 	struct Type
 	{
+		// Functions
+		template<typename T>
+		static Type create(std::string_view name, TemplateTypeId id, 
+			std::vector<BaseClass> bases, std::vector<Field> fields, std::vector<Method> methods);
+
+		using Destructor = void (*)(void*);
+
+		Destructor destructor;
+
 		// Data
 		std::string name;
 		TemplateTypeId id;
@@ -76,7 +86,7 @@ namespace Neat
 		using GetValueFunction = std::any (*)(void* object);
 		using SetValueFunction = void (*)(void* object, std::any value);
 
-		GetValueFunction get_value;
+		GetValueFunction get_reference;
 		SetValueFunction set_value;
 
 		// Data
@@ -113,6 +123,28 @@ namespace Neat
 		bool operator==(const Method& other) const noexcept = default;
 		std::strong_ordering operator<=>(const Method& other) const noexcept;
 	};
+
+	template<typename T>
+	struct VectorTrait
+	{
+		static constexpr bool is_vector = false;
+	};
+
+	template<typename T>
+	struct VectorTrait<std::vector<T>>
+	{
+		static constexpr bool is_vector = true;
+
+		using value_type = T;
+	};
+
+	template<typename T>
+	struct VectorTrait<T[]>
+	{
+		static constexpr bool is_vector = true;
+
+		using value_type = T;
+	};
 }
 
 
@@ -123,15 +155,39 @@ namespace Neat
 {
 	namespace Detail
 	{
+		template<typename T>
+		void destructor_erased(void* object)
+		{
+			T* object_ = static_cast<T*>(object);
+			object_->~T();
+		}
+	}
+
+	template<typename T>
+	Type Type::create(std::string_view name, TemplateTypeId id,
+		std::vector<BaseClass> bases, std::vector<Field> fields, std::vector<Method> methods)
+	{
+		return Type{
+			.destructor = (std::is_trivially_destructible_v<T> ? nullptr : &Detail::destructor_erased<T>),
+			.name = std::string{ name },
+			.id = id,
+			.bases = std::move(bases),
+			.fields = std::move(fields),
+			.methods = std::move(methods)
+		};
+	}
+
+	namespace Detail
+	{
 		template<typename TObject, typename TType, TType TObject::* PtrToMember>
-		std::any get_value_erased(void* object)
+		std::any get_field_ref_erased(void* object)
 		{
 			TObject* object_ = static_cast<TObject*>(object);
-			return { object_->*PtrToMember };
+			return { std::ref(object_->*PtrToMember) };
 		}
 
 		template<typename TObject, typename TType, TType TObject::* PtrToMember>
-		void set_value_erased(void* object, std::any value)
+		void set_field_erased(void* object, std::any value)
 		{
 			assert(std::any_cast<TType>(&value) != nullptr);
 
@@ -144,8 +200,8 @@ namespace Neat
 	Field Field::create(std::string_view name, Access access)
 	{
 		return Field{
-			.get_value = &Detail::get_value_erased<TObject, TType, PtrToMember>,
-			.set_value = &Detail::set_value_erased<TObject, TType, PtrToMember>,
+			.get_reference = &Detail::get_field_ref_erased<TObject, TType, PtrToMember>,
+			.set_value = &Detail::set_field_erased<TObject, TType, PtrToMember>,
 			.object_type = get_id<TObject>(),
 			.type = get_id<TType>(),
 			.name = std::string{ name },

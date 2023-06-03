@@ -16,8 +16,8 @@
 	)
 	FetchContent_Declare(
 		ifc-reader
-		GIT_REPOSITORY https://github.com/FireFlyForLife/ifc-reader.git
-		GIT_TAG 25691d13474721c2648484c5fb001efb08c41c5a # Latest at the time of writing
+		GIT_REPOSITORY https://github.com/AndreyG/ifc-reader.git
+		GIT_TAG b6980448b35b87d33a1bc1cf10a46badac6333f0 # Latest at the time of writing
 		FIND_PACKAGE_ARGS
 	)
 	FetchContent_Declare(
@@ -33,18 +33,16 @@
 		FIND_PACKAGE_ARGS
 	)
 	FetchContent_Declare(
-		nlohmann_json 
+		nlohmann_json # We don't directly use nlohmann_json in our tools, but we provide it for the dependency: `ifc-msvc`
 		GIT_REPOSITORY https://github.com/nlohmann/json.git
 		GIT_TAG v3.11.2
-		# NOTE: We don't manually call `FetchContent_MakeAvailable()` with nlohmann_json.
-		# It's intended to be a fallback for when nlohmann_json is not installed yet for the ifc-msvc dependency.
-		OVERRIDE_FIND_PACKAGE
+		FIND_PACKAGE_ARGS
 	)
 
 	message(STATUS "[NeatReflection] Fetching third party code gen dependencies with FetchContent_MakeAvailable. This might take a few minutes...")
-	FetchContent_MakeAvailable(docopt ifc-reader magic_enum mio)
+	FetchContent_MakeAvailable(docopt ifc-reader magic_enum mio nlohmann_json)
 
-	add_subdirectory("${ifc-reader_SOURCE_DIR}/lib/msvc" "${ifc-reader_BINARY_DIR}/lib/msvc")
+	add_subdirectory("${ifc-reader_SOURCE_DIR}/lib/msvc" "${ifc-reader_BINARY_DIR}/lib/msvc") # Build `ifc-msvc` component from the `ifc-reader` repository
 
 
 	# Shared Processing Library

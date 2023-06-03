@@ -4,13 +4,15 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <cassert>
 
 
 namespace Neat
 {
 	struct TypeContainer
 	{
-		struct string_hash : std::hash<std::string_view> {
+		struct string_hash : std::hash<std::string_view> 
+		{
 			using is_transparent = std::true_type;
 		};
 
@@ -23,18 +25,24 @@ namespace Neat
 
 	Type& add_type(Type&& type)
 	{
+		auto type_by_id_it = type_container.by_template_type_id.find(type.id);
+		if (type_by_id_it != type_container.by_template_type_id.end())
+		{
+			return type_container.types[type_by_id_it->second];
+		}
+
 		type_container.by_type_name[type.name] = type_container.types.size();
 		type_container.by_template_type_id[type.id] = type_container.types.size();
 		type_container.types.push_back(std::move(type));
 		return type_container.types.back();
 	}
 
-	std::span<Type> get_types()
+	std::span<const Type> get_types()
 	{
 		return { type_container.types.begin(), type_container.types.end() };
 	}
 
-	Type* get_type(std::string_view type_name)
+	const Type* get_type(std::string_view type_name)
 	{
 		auto it = type_container.by_type_name.find(type_name);
 		if (it == type_container.by_type_name.end())
@@ -44,7 +52,7 @@ namespace Neat
 		return &type_container.types[it->second];
 	}
 
-	Type* get_type(TemplateTypeId type_id)
+	const Type* get_type(TemplateTypeId type_id)
 	{
 		auto it = type_container.by_template_type_id.find(type_id);
 		if (it == type_container.by_template_type_id.end())

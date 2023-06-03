@@ -17,7 +17,7 @@ public:
 
     static ifc::Environment::BlobHolderPtr create_unique(const std::filesystem::path& path)
     {
-        return std::make_unique<MioBlobHolder>(path.native());
+        return std::make_unique<MioBlobHolder>(path);
     }
 
     ifc::File::BlobView view() const override

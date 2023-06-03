@@ -9,6 +9,7 @@ include(extras/BMIPath.cmake)
 
 # User Options
 option(NEAT_REFLECTION_BUILD_TESTING			"Enable tests for NeatReflection" OFF)
+option(NEAT_REFLECTION_BUILD_EXAMPLES			"Enable examples for NeatReflection" OFF)
 # option(NEAT_REFLECTION_USE_PREBUILT_CODEGEN_EXE "Don't compile NeatReflectionCodeGen from source but use the prebuilt binary." ON)
 
 
@@ -68,8 +69,10 @@ add_library (NeatReflection
     "include/neat/TemplateTypeId.h"
     "include/neat/DllMacro.h" 
     "include/neat/ReflectPrivateMembers.h"
+    "include/neat/Any.h"
     "src/neat/Reflection.cpp"
-    "src/neat/TemplateTypeId.cpp")
+    "src/neat/TemplateTypeId.cpp"
+    "src/neat/Any.cpp")
 target_compile_features(NeatReflection PUBLIC cxx_std_20)
 target_include_directories(NeatReflection PUBLIC "include")
 target_compile_definitions(NeatReflection PRIVATE BUILDING_REFLECTIONLIB=1) # TODO: Set DLL_REFLECTIONLIB when built as DLL
@@ -78,6 +81,8 @@ set_target_properties(NeatReflection PROPERTIES FOLDER "Neat")
 add_subdirectory(tools/neat_code_gen)
 
 add_subdirectory(tests)
+
+add_subdirectory(examples)
 
 
 # Little warning, we only support the latest MSVC

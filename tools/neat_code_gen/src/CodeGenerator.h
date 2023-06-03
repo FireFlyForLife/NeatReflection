@@ -1,6 +1,8 @@
 #pragma once
 #include "neat/Reflection.h"
 
+#include <vector>
+#include <unordered_map>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -9,6 +11,7 @@
 #include "reflifc/Module.h"
 #include "reflifc/TupleView.h"
 #include "reflifc/Type.h"
+#include "ifc/Type.h"
 
 namespace ifc
 {
@@ -25,9 +28,22 @@ public:
 	void write_cpp_file(reflifc::Module module, std::ostream& out);
 
 private:
-	void scan(reflifc::Scope scope_desc);
-	void scan(reflifc::Declaration decl);
-	void scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl);
+	struct ReflectableType
+	{
+		reflifc::Declaration decl;
+		reflifc::ScopeDeclaration scope_decl;
+
+		std::vector<reflifc::Field> fields;
+		std::vector<reflifc::Method> method;
+	};
+	struct ReflectableTypes
+	{
+		// TODO: Support multiple environments
+		std::unordered_map<ifc::TypeIndex, ReflectableType> types;
+	};
+	void scan(reflifc::Scope scope_desc, ReflectableTypes& out_types);
+	void scan(reflifc::Declaration decl, ReflectableTypes& out_types);
+	void scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl, ReflectableTypes& out_types);
 
 	void render(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl);
 	struct TypeMembers { std::string fields, methods; };

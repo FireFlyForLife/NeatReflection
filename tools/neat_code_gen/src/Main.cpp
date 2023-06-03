@@ -75,7 +75,7 @@ int main(int argc, char const *argv[])
     std::cout << "Running NeatReflectionCodeGen!\n";
 
     const std::vector<std::string> arguments{ argv + 1, argv + argc };
-    docopt::Options parsed = docopt::docopt(USAGE, arguments, true, "0.1");
+    docopt::Options parsed = docopt::docopt(USAGE, arguments, true, "0.2");
 
     if (parsed["scan"].asBool())
     {

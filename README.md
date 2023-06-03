@@ -17,27 +17,27 @@ export struct MyStruct {
     int get_42() { return 42; }
 };
 
-int main() {
+void example() {
     MyStruct my_struct{ .damage = -5 };
 
-    Neat::Type* type = Neat::get_type<MyStruct>();
+    const Neat::Type* type = Neat::get_type<MyStruct>();
 
-    auto& field = type->fields[0];
+    const Neat::Field& field = type->fields[0];
     assert(field.name == "damage");
 
-    auto damage = field.get_value(&my_struct);
-    auto damage_int = std::any_cast<int>(&damage);
-    assert(old_damage_int != nullptr && *old_damage_int == -5);
+    auto damage_any = field.get_reference(&my_struct);
+    auto damage = std::any_cast<std::reference_wrapper<int>>(&damage);
+    assert(damage != nullptr && *damage == -5);
 
     field.set_value(&my_struct, 75);
     assert(my_struct.damage == 75);
 
-    auto& method = type->methods[0];
+    const Neat::Method& method = type->methods[0];
     assert(method.name == "get_42");
 
-    auto value = method.invoke(&my_struct, {});
-    auto value_int = std::any_cast<int>(&value);
-    assert(value_int != nullptr && *value_int == 42);
+    auto value_any = method.invoke(&my_struct, {});
+    auto value = std::any_cast<int>(&value);
+    assert(value != nullptr && *value == 42);
 }
 ```
 

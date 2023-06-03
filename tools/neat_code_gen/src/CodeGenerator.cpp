@@ -51,7 +51,8 @@ void CodeGenerator::write_cpp_file(reflifc::Module module, std::ostream& out)
 
 	const auto module_name = unit.name();
 	
-	scan(module.global_namespace());
+	ReflectableTypes reflectable_types{};
+	scan(module.global_namespace(), reflectable_types);
 	
 	out << std::format(
 R"(// ================================================================================
@@ -84,22 +85,22 @@ namespace Neat
 	out.flush();
 }
 
-void CodeGenerator::scan(reflifc::Scope scope_desc)
+void CodeGenerator::scan(reflifc::Scope scope_desc, ReflectableTypes& out_types)
 {
 	auto declarations = scope_desc.get_declarations();
 	for (auto declaration : declarations)
 	{
-		scan(declaration);
+		scan(declaration, out_types);
 	}
 }
 
-void CodeGenerator::scan(reflifc::Declaration decl)
+void CodeGenerator::scan(reflifc::Declaration decl, ReflectableTypes& out_types)
 {
 	if (decl.is_scope())
-		scan(decl.as_scope(), decl);
+		scan(decl.as_scope(), decl, out_types);
 }
 
-void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl)
+void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl, ReflectableTypes& out_types)
 {
 	switch (scope_decl.kind())
 	{
@@ -113,7 +114,7 @@ void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declarat
 		// TODO: Implement at some point
 		break;
 	case ifc::TypeBasis::Namespace:
-		scan(scope_decl.as_namespace().scope());
+		scan(scope_decl.as_namespace().scope(), out_types);
 		break;
 	}
 }
@@ -131,11 +132,11 @@ void CodeGenerator::render(reflifc::ClassOrStruct scope_decl, reflifc::Declarati
 	const auto [fields, methods] = render_members(type_name, var_name, scope_decl, reflect_privates);
 	const auto bases = render_bases(scope_decl);
 
-	code += std::format(R"(add_type({{ "{1}", get_id<{1}>(),
+	code += std::format(R"(add_type(Type::create<{1}>("{1}", get_id<{1}>(),
 	{{ {2} }},
 	{{ {3} }},
 	{{ {4} }}
-}});
+));
 )", var_name, type_name, bases, fields, methods);
 }
 

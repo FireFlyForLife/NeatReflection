@@ -9,7 +9,7 @@
 import TestModule1;
 
 
-static Neat::Method* find_method(Neat::Type& type, std::string_view name)
+static const Neat::Method* find_method(const Neat::Type& type, std::string_view name)
 {
 	for (auto& method : type.methods)
 	{
@@ -26,7 +26,7 @@ TEST_CASE("Invoke method2")
 {
 	MethodTester method_tester{};
 
-	Neat::Type* type = Neat::get_type<MethodTester>();
+	const Neat::Type* type = Neat::get_type<MethodTester>();
 	REQUIRE(type != nullptr);
 
 	auto method = find_method(*type, "TestMethod2");
@@ -42,7 +42,7 @@ TEST_CASE("Invoke method return")
 {
 	MethodTester method_tester{};
 
-	Neat::Type* type = Neat::get_type<MethodTester>();
+	const Neat::Type* type = Neat::get_type<MethodTester>();
 	REQUIRE(type != nullptr);
 
 	auto method = find_method(*type, "TestMethodReturn");
@@ -60,7 +60,7 @@ TEST_CASE("Invoke const method return")
 {
 	MethodTester method_tester{};
 
-	Neat::Type* type = Neat::get_type<MethodTester>();
+	const Neat::Type* type = Neat::get_type<MethodTester>();
 	REQUIRE(type != nullptr);
 
 	auto method = find_method(*type, "TestMethodConstReturn");
