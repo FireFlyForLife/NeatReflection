@@ -12,7 +12,6 @@
 #include "reflifc/Expression.h"
 #include "reflifc/TemplateId.h"
 #include "reflifc/decl/AliasDeclaration.h"
-#include "reflifc/decl/ClassOrStruct.h"
 #include "reflifc/decl/Concept.h"
 #include "reflifc/decl/Enumeration.h"
 #include "reflifc/decl/Function.h"
@@ -34,6 +33,30 @@
 #include "magic_enum.hpp"
 
 
+template <class T>
+inline void hash_combine(std::size_t& seed, const T& v)
+{
+	std::hash<T> hasher;
+	seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
+size_t std::hash<reflifc::Declaration>::operator()(const reflifc::Declaration& decl) const
+{
+	// TODO: Submit patch to reflifc
+	struct HackyDeclarationData
+	{
+		ifc::File const* ifc_;
+		ifc::DeclIndex index_;
+	};
+
+	auto decl_data = (HackyDeclarationData&)decl;
+
+	size_t seed = 0;
+	hash_combine(seed, decl_data.ifc_);
+	hash_combine(seed, decl_data.index_);
+	return seed;
+}
+
 CodeGenerator::CodeGenerator(const ifc::File& ifc_file, ifc::Environment& environment)
 	: ifc_file(&ifc_file)
 	, environment(&environment)
@@ -54,6 +77,11 @@ void CodeGenerator::write_cpp_file(reflifc::Module module, std::ostream& out)
 	ReflectableTypes reflectable_types{};
 	scan(module.global_namespace(), reflectable_types);
 	
+	for (auto& reflectable_type : reflectable_types.types)
+	{
+		render(reflectable_type.second);
+	}
+
 	out << std::format(
 R"(// ================================================================================
 //                      AUTO GENERATED REFLECTION DATA FILE 
@@ -106,9 +134,7 @@ void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declarat
 	{
 	case ifc::TypeBasis::Class:
 	case ifc::TypeBasis::Struct:
-		{
-			render(scope_decl.as_class_or_struct(), decl);
-		}
+		scan(scope_decl.as_class_or_struct(), decl, out_types);
 		break;
 	case ifc::TypeBasis::Union:
 		// TODO: Implement at some point
@@ -119,31 +145,20 @@ void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declarat
 	}
 }
 
-void CodeGenerator::render(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl)
+void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl, ReflectableTypes& out_types)
 {
-	if(!is_type_exported(decl, *environment))
+	if (out_types.types.contains(decl))
+	{
+		return;
+	}
+	if (!is_type_exported(decl, *environment))
 	{
 		return;
 	}
 
-	const auto type_name = render_namespace(decl, *environment) + scope_decl.name().as_identifier();
-	const auto var_name = to_snake_case(type_name) + '_';
+	ReflectableType type{ decl, scope_decl };
+
 	const bool reflect_privates = reflects_private_members(decl, *environment);
-	const auto [fields, methods] = render_members(type_name, var_name, scope_decl, reflect_privates);
-	const auto bases = render_bases(scope_decl);
-
-	code += std::format(R"(add_type(Type::create<{1}>("{1}", get_id<{1}>(),
-	{{ {2} }},
-	{{ {3} }},
-	{{ {4} }}
-));
-)", var_name, type_name, bases, fields, methods);
-}
-
-CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_name, std::string_view type_variable, reflifc::ClassOrStruct scope_decl, bool reflect_private_members)
-{
-	std::string fields;
-	std::string methods;
 
 	auto declarations = scope_decl.members();
 	for (auto decl : declarations)
@@ -153,60 +168,111 @@ CodeGenerator::TypeMembers CodeGenerator::render_members(std::string_view type_n
 		case ifc::DeclSort::Field:
 		{
 			const auto field = decl.as_field();
-			const auto type = render_full_typename(field.type(), *environment);
-			const auto name = field.name();
-			const auto access = render_as_neat_access_enum(field.access(), "Access::...");
 
-			if (is_member_publicly_accessible(field, scope_decl.kind(), reflect_private_members, *environment))
+			if (is_member_publicly_accessible(field, scope_decl.kind(), reflect_privates, *environment))
 			{
-				fields += std::format(R"(Field::create<{0}, {1}, &{0}::{2}>("{2}", {3}), )", type_name, type, name, access);
+				type.fields.push_back(field);
 			}
 			break;
 		}
 		case ifc::DeclSort::Method:
 		{
 			const auto method = decl.as_method();
-			const auto method_type = method.type();
-			const auto return_type = render_full_typename(method_type.return_type(), *environment);
-			auto params = method_type.parameters();
-			auto param_types = std::string{ "" };
-			param_types.reserve(params.size() * 8);
-			for (auto param : params)
+			
+			if (is_member_publicly_accessible(method, scope_decl.kind(), reflect_privates, *environment))
 			{
-				param_types += ", ";
-				param_types += render_full_typename(param, *environment);
-			}
-			const auto name = method.name().as_identifier();
-			const auto access = render_as_neat_access_enum(method.access());
-
-			if (is_member_publicly_accessible(method, scope_decl.kind(), reflect_private_members, *environment))
-			{
-				methods += std::format(R"(Method::create<&{0}::{3}, {0}, {1}{2}>("{3}", {4}), )", type_name, return_type, param_types, name, access);
+				type.methods.push_back(method);
 			}
 			break;
 		}
 		}
 	}
-	return { fields, methods };
-}
-
-std::string CodeGenerator::render_bases(reflifc::ClassOrStruct scope_decl)
-{
-	// Otherwise struct
-	const bool is_class = (scope_decl.kind() == ifc::TypeBasis::Class);
-	const auto default_access = (is_class ? "private" : "public");
 
 	auto bases = scope_decl.bases();
-
-	std::string rendered;
-	rendered.reserve(bases.size() * 16);
-
-	for (auto type : bases)
+	for (auto base : bases)
 	{
-		auto access_string = render_as_neat_access_enum(type.access, default_access);
-		auto type_name = render_full_typename(type.type, *environment);
-		rendered += std::format(R"(BaseClass{{ get_id<{0}>(), {1} }}, )", type_name, access_string);
+		if (is_type_exported(base.type, *environment))
+		{
+			type.bases.push_back(base);
+		}
 	}
 
-	return rendered;
+	out_types.types.emplace(decl, type);
 }
+
+void CodeGenerator::render(ReflectableType& type)
+{
+	const auto type_name = render_namespace(type.decl, *environment) + type.class_struct_decl.name().as_identifier();
+	const bool reflect_privates = reflects_private_members(type.decl, *environment);
+	const bool is_class = (type.class_struct_decl.kind() == ifc::TypeBasis::Class);
+
+	std::string fields;
+	fields.reserve(32 * type.fields.size());
+	for (auto& field : type.fields)
+	{
+		fields += render_field(type_name, field);
+		fields += ", ";
+	}
+
+	std::string methods;
+	methods.reserve(32 * type.methods.size());
+	for (auto& method : type.methods)
+	{
+		methods += render_method(type_name, method);
+		methods += ", ";
+	}
+
+	std::string bases;
+	bases.reserve(32 * type.bases.size());
+	for (auto& base_class : type.bases)
+	{
+		bases += render_base_class(type_name, is_class, base_class);
+		bases += ", ";
+	}
+
+	code += std::format(R"(add_type(Type::create<{0}>("{0}", get_id<{0}>(),
+	{{ {1} }},
+	{{ {2} }},
+	{{ {3} }}
+));
+)", type_name, bases, fields, methods);
+}
+
+std::string CodeGenerator::render_field(std::string_view outer_class_type, const reflifc::Field& field) const
+{
+	const auto field_type = render_full_typename(field.type(), *environment);
+	const auto name = field.name();
+	const auto access = render_as_neat_access_enum(field.access(), "Access::...");
+
+	return std::format(R"(Field::create<{0}, {1}, &{0}::{2}>("{2}", {3}))", outer_class_type, field_type, name, access);
+}
+
+std::string CodeGenerator::render_method(std::string_view outer_class_type, const reflifc::Method& method) const
+{
+	const auto method_type = method.type();
+	const auto return_type = render_full_typename(method_type.return_type(), *environment);
+	auto params = method_type.parameters();
+	auto param_types = std::string{ "" };
+	param_types.reserve(params.size() * 8);
+	for (auto param : params)
+	{
+		param_types += ", ";
+		param_types += render_full_typename(param, *environment);
+	}
+	const auto name = method.name().as_identifier();
+	const auto access = render_as_neat_access_enum(method.access());
+	
+	return std::format(R"(Method::create<&{0}::{3}, {0}, {1}{2}>("{3}", {4}))", outer_class_type, return_type, param_types, name, access);
+}
+
+std::string CodeGenerator::render_base_class(std::string_view outer_class_type, bool outer_is_class, const reflifc::BaseType& base_class) const
+{
+	// If outer type is a class or struct, the default access is private or public
+	const auto default_access = (outer_is_class ? "private" : "public");
+	auto access_string = render_as_neat_access_enum(base_class.access, default_access);
+
+	auto type_name = render_full_typename(base_class.type, *environment);
+
+	return std::format(R"(BaseClass{{ get_id<{0}>(), {1} }})", type_name, access_string);
+}
+

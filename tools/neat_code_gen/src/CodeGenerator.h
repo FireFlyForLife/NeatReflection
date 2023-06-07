@@ -11,12 +11,23 @@
 #include "reflifc/Module.h"
 #include "reflifc/TupleView.h"
 #include "reflifc/Type.h"
+#include "reflifc/Declaration.h"
+#include "reflifc/decl/ClassOrStruct.h"
 #include "ifc/Type.h"
 
 namespace ifc
 {
 	class File;
 	class Environment;
+}
+
+namespace std
+{
+	template<>
+	struct hash<reflifc::Declaration>
+	{
+		size_t operator()(const reflifc::Declaration& decl) const;
+	};
 }
 
 
@@ -31,24 +42,26 @@ private:
 	struct ReflectableType
 	{
 		reflifc::Declaration decl;
-		reflifc::ScopeDeclaration scope_decl;
+		reflifc::ClassOrStruct class_struct_decl;
 
 		std::vector<reflifc::Field> fields;
-		std::vector<reflifc::Method> method;
+		std::vector<reflifc::Method> methods;
+		std::vector<reflifc::BaseType> bases;
 	};
 	struct ReflectableTypes
 	{
 		// TODO: Support multiple environments
-		std::unordered_map<ifc::TypeIndex, ReflectableType> types;
+		std::unordered_map<reflifc::Declaration, ReflectableType> types;
 	};
 	void scan(reflifc::Scope scope_desc, ReflectableTypes& out_types);
 	void scan(reflifc::Declaration decl, ReflectableTypes& out_types);
 	void scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl, ReflectableTypes& out_types);
+	void scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl, ReflectableTypes& out_types);
 
-	void render(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl);
-	struct TypeMembers { std::string fields, methods; };
-	TypeMembers render_members(std::string_view object, std::string_view type_variable, reflifc::ClassOrStruct scope_decl, bool reflect_private_members);
-	std::string render_bases(reflifc::ClassOrStruct scope_decl);
+	void render(ReflectableType& type);
+	std::string render_field(std::string_view outer_class_type, const reflifc::Field& field) const;
+	std::string render_method(std::string_view outer_class_type, const reflifc::Method& method) const;
+	std::string render_base_class(std::string_view outer_class_type, bool outer_is_class, const reflifc::BaseType& base_class) const;
 
 private:
 	std::string code;
