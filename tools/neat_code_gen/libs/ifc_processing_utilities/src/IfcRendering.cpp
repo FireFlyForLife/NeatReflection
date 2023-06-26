@@ -194,6 +194,8 @@ std::string render_full_typename(reflifc::Expression expr, ifc::Environment& env
 		return render_full_typename(expr.as_type(), environment);
 	case ifc::ExprSort::TemplateId:
 		return render_full_typename(expr.as_template_id(), environment);
+	case ifc::ExprSort::Literal:
+		return render_full_typename(expr.as_literal());
 	case ifc::ExprSort::Empty:
 		return "";
 
@@ -201,6 +203,27 @@ std::string render_full_typename(reflifc::Expression expr, ifc::Environment& env
 	default:
 		throw ContextualException(std::format("Unexpected expression while rendering typename. ExprSort is: {}",
 			magic_enum::enum_name(expr.sort())));
+	}
+}
+
+std::string render_full_typename(reflifc::Literal literal)
+{
+	if (literal.is_null())
+	{
+		return "";
+	}
+
+	switch (literal.sort())
+	{
+	case ifc::LiteralSort::Immediate: // uint32
+		return std::to_string(literal.int_value());
+	case ifc::LiteralSort::Integer: // uint64
+		//return std::to_string(literal.int64_value());
+	case ifc::LiteralSort::FloatingPoint: // double (8 byte)
+		//return std::to_string(literal.float_value());
+	default:
+		UNREACHABLE(); // Unknown LiteralSort enum value
+		return "";
 	}
 }
 
@@ -413,7 +436,7 @@ bool reflects_private_members(reflifc::Declaration type_decl, ifc::Environment& 
 			// TODO OPT: Don't require allocations for these comparisons.
 			auto friend_name = render_namespace(named_decl, environment) + render_refered_declaration(named_decl, environment);
 			auto rendered_type = render_full_typename(named_decl.as_function().type(), environment);
-			return friend_name == "Neat::reflect_private_members"
+			return friend_name == "Neat::reflect_types_and_members"
 				&& rendered_type == "void ()";
 		}
 		case ifc::ExprSort::TemplateId:
@@ -488,6 +511,8 @@ bool is_type_exported(reflifc::Expression expr, ifc::Environment& environment)
 		return is_type_exported(expr.as_type(), environment);
 	case ifc::ExprSort::TemplateId:
 		return is_type_exported(expr.as_template_id(), environment);
+	case ifc::ExprSort::Literal:
+		return true; // ifc::LiteralSort only has the types uint32, uint64 or double. Each of these types are always visible. 
 	case ifc::ExprSort::Empty:
 		return false;
 

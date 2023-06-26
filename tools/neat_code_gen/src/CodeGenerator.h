@@ -8,11 +8,15 @@
 #include <string_view>
 #include <optional>
 
+#include "reflifc/Expression.h"
 #include "reflifc/Module.h"
 #include "reflifc/TupleView.h"
 #include "reflifc/Type.h"
 #include "reflifc/Declaration.h"
 #include "reflifc/decl/ClassOrStruct.h"
+#include "reflifc/decl/Field.h"
+#include "reflifc/decl/Function.h"
+#include "reflifc/type/Base.h"
 #include "ifc/Type.h"
 
 namespace ifc
@@ -55,8 +59,11 @@ private:
 	};
 	void scan(reflifc::Scope scope_desc, ReflectableTypes& out_types);
 	void scan(reflifc::Declaration decl, ReflectableTypes& out_types);
+	void scan(reflifc::TemplateDeclaration template_decl, reflifc::Declaration decl, ReflectableTypes& out_types);
 	void scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl, ReflectableTypes& out_types);
 	void scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl, ReflectableTypes& out_types);
+	void scan(reflifc::Type type, ReflectableTypes& out_types);
+	void scan(reflifc::Expression expression, ReflectableTypes& out_types);
 
 	void render(ReflectableType& type);
 	std::string render_field(std::string_view outer_class_type, const reflifc::Field& field) const;

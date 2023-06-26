@@ -133,9 +133,11 @@ TEST_CASE("Types have correct data")
 		CHECK(type->id == Neat::get_id<MyStruct2>());
 		const std::vector<Neat::BaseClass> type_expected_bases{ { Neat::get_id<MyBaseStruct2>(), Neat::Access::Public } };
 		CHECK(type->bases == type_expected_bases);
-		REQUIRE(type->fields.size() == 2);
+		REQUIRE(type->fields.size() == 3);
 		check_field(type->fields[0], type->id, Neat::get_id<double>(), "damage");
 		check_field(type->fields[1], type->id, Neat::get_id<unsigned int>(), "speed");
+		check_field(type->fields[2], type->id, Neat::get_id<std::array<int, 4>>(), "four_ints");
+
 		REQUIRE(type->methods.size() == 3);
 		check_method(type->methods[0], type->id, Neat::get_id<void>(), "helper_function", {});
 		check_method(type->methods[1], type->id, Neat::get_id<void>(), "argumented_function", { Neat::get_id<int>(), Neat::get_id<int>() });

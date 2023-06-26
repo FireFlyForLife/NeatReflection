@@ -2,8 +2,8 @@
 
 namespace Neat
 {
-	void reflect_private_members(); // function stub to indicate we expose full type info
+    void reflect_types_and_members(); // Function stub to in which we register type data.
+                                      // Friending this function will give NeatReflection access to private members.
 
-	// I'm not sure if I want to have a macro for this
-#define REFLECT_PRIVATE_MEMBERS friend void ::Neat::reflect_private_members()
+#define REFLECT_PRIVATE_MEMBERS friend void ::Neat::reflect_types_and_members()
 }

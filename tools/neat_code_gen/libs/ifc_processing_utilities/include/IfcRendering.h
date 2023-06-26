@@ -15,6 +15,7 @@ std::string render_full_typename(reflifc::Type type, ifc::Environment& environme
 std::string render_full_typename(reflifc::FunctionType type, ifc::Environment& environment);
 std::string render_full_typename(const ifc::FundamentalType& type);
 std::string render_full_typename(reflifc::Expression expr, ifc::Environment& environment);
+std::string render_full_typename(reflifc::Literal literal);
 std::string render_full_typename(reflifc::TupleExpressionView tuple, ifc::Environment& environment);
 std::string render_full_typename(reflifc::TemplateId template_id, ifc::Environment& environment);
 std::string render_full_typename(reflifc::Declaration decl, ifc::Environment& environment);
