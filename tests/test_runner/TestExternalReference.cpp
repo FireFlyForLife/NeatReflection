@@ -13,5 +13,6 @@ TEST_CASE("Struct with member which type is externally defined")
 	const auto& field_0 = composite_struct_type->fields[0];
 	
 	auto field_type = Neat::get_type(field_0.type);
+	REQUIRE(field_type != nullptr);
 	CHECK(field_type->name == "MyStruct");
 }

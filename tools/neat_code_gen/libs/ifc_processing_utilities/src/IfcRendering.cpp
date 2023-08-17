@@ -5,6 +5,7 @@
 
 #include "ifc/Type.h"
 #include "ifc/Expression.h"
+#include "ifc/Declaration.h"
 #include "reflifc/Expression.h"
 #include "reflifc/TemplateId.h"
 #include "reflifc/decl/AliasDeclaration.h"
@@ -16,6 +17,7 @@
 #include "reflifc/decl/Intrinsic.h"
 #include "reflifc/decl/Namespace.h"
 #include "reflifc/decl/Parameter.h"
+#include "reflifc/decl/Specialization.h"
 #include "reflifc/decl/TemplateDeclaration.h"
 #include "reflifc/decl/UsingDeclaration.h"
 #include "reflifc/type/Function.h"
@@ -48,8 +50,9 @@ std::string render_full_typename(reflifc::Type type, ifc::Environment& environme
 	case ifc::TypeSort::RvalueReference:
 		return render_full_typename(type.as_rvalue_reference().referee, environment) + "&&";
 	case ifc::TypeSort::Qualified:
-		return render_full_typename(type.as_qualified().unqualified(), environment) +
-			render_qualifiers(type.as_qualified().qualifiers());
+		return render_full_typename(type.as_qualified().unqualified(), environment)
+			+ " "
+			+ render_qualifiers(type.as_qualified().qualifiers());
 	case ifc::TypeSort::Placeholder:
 		if (auto elaborated_type = type.as_placeholder().elaboration())
 		{
@@ -369,7 +372,7 @@ std::string render_neat_access_enum(Neat::Access access)
 
 bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBasis type, bool reflects_private_members, ifc::Environment& environment)
 {
-	if (!is_type_exported(field_declaration.type(), environment))
+	if (!is_type_visible_from_module(field_declaration.type(), reflifc::Module{nullptr}, environment))
 	{
 		return false;
 	}
@@ -396,7 +399,7 @@ bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBa
 
 bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::TypeBasis type, bool reflects_private_members, ifc::Environment& environment)
 {
-	if (!is_type_exported(method_declaration.type(), environment))
+	if (!is_type_visible_from_module(method_declaration.type(), reflifc::Module{nullptr}, environment))
 	{
 		return false;
 	}
@@ -451,66 +454,54 @@ bool reflects_private_members(reflifc::Declaration type_decl, ifc::Environment& 
 	return false;
 }
 
-bool is_type_exported(reflifc::Type type, ifc::Environment& environment)
+bool is_type_visible_from_module(reflifc::Type type, reflifc::Module module_, ifc::Environment& environment)
 {
 	switch (type.sort())
 	{
 	case ifc::TypeSort::Fundamental:
 		return true;
 	case ifc::TypeSort::Designated:
-		return is_type_exported(type.designation(), environment);
+		return is_type_visible_from_module(type.designation(), module_, environment);
 	case ifc::TypeSort::Syntactic:
-		return is_type_exported(type.as_syntactic(), environment);
+		return is_type_visible_from_module(type.as_syntactic(), module_, environment);
 	case ifc::TypeSort::Method:
-		return is_type_exported(type.as_method(), environment);
+		return is_type_visible_from_module(type.as_method(), module_, environment);
+	case ifc::TypeSort::Qualified:
+		return is_type_visible_from_module(type.as_qualified().unqualified(), module_, environment);
 	default:
 		throw ContextualException(std::format("Unexpected type while checking if the type was exported. type sort: {}",
 			magic_enum::enum_name(type.sort())));
 	}
 }
 
-bool is_type_exported(reflifc::MethodType method, ifc::Environment& environment)
+bool is_type_visible_from_module(reflifc::MethodType method, reflifc::Module module_, ifc::Environment& environment)
 {
-	return is_type_exported(method.return_type(), environment) &&
-		std::ranges::all_of(method.parameters(), [&environment](reflifc::Type type) { return is_type_exported(type, environment); });
+	return is_type_visible_from_module(method.return_type(), module_, environment) &&
+		std::ranges::all_of(method.parameters(), [module_, &environment](reflifc::Type type) { return is_type_visible_from_module(type, module_, environment); });
 }
 
-bool is_type_exported(reflifc::Declaration decl, ifc::Environment& environment)
+bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module module_, ifc::Environment& environment)
 {
-	ifc::BasicSpecifiers specifiers{};
-
-	switch (decl.sort())
-	{
-	case ifc::DeclSort::Scope:
-		specifiers = decl.as_scope().specifiers();
-		break;
-	case ifc::DeclSort::Enumeration:
-		specifiers = decl.as_enumeration().specifiers();
-		break;
-	case ifc::DeclSort::Template:
-		specifiers = decl.as_template().specifiers();
-		break;
-	case ifc::DeclSort::Reference:
-		return is_type_exported(decl.as_reference().referenced_declaration(environment), environment);
-	default:
-		throw ContextualException(std::format("Unexpected declaration while checking if the type decl was exported. type decl sort: {}",
+	auto specifiers = get_basic_specifiers(decl, environment);
+	if (!specifiers) {
+		throw ContextualException(std::format("Unexpected declaration while extracting basic specifiers, for checking if the declaration is visible. decl sort: {}",
 			magic_enum::enum_name(decl.sort())));
 	}
 
 	using namespace magic_enum::bitwise_operators;
-	return (magic_enum::enum_underlying(specifiers & ifc::BasicSpecifiers::NonExported) == 0);
+	return (magic_enum::enum_underlying(*specifiers & ifc::BasicSpecifiers::NonExported) == 0);
 }
 
-bool is_type_exported(reflifc::Expression expr, ifc::Environment& environment)
+bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module module_, ifc::Environment& environment)
 {
 	switch (expr.sort())
 	{
 	case ifc::ExprSort::NamedDecl:
-		return is_type_exported(expr.referenced_decl(), environment);
+		return is_type_visible_from_module(expr.referenced_decl(), module_, environment);
 	case ifc::ExprSort::Type:
-		return is_type_exported(expr.as_type(), environment);
+		return is_type_visible_from_module(expr.as_type(), module_, environment);
 	case ifc::ExprSort::TemplateId:
-		return is_type_exported(expr.as_template_id(), environment);
+		return is_type_visible_from_module(expr.as_template_id(), module_, environment);
 	case ifc::ExprSort::Literal:
 		return true; // ifc::LiteralSort only has the types uint32, uint64 or double. Each of these types are always visible. 
 	case ifc::ExprSort::Empty:
@@ -532,13 +523,13 @@ bool is_type_exported(reflifc::Expression expr, ifc::Environment& environment)
 	}
 }
 
-bool is_type_exported(reflifc::TemplateId template_id, ifc::Environment& environment)
+bool is_type_visible_from_module(reflifc::TemplateId template_id, reflifc::Module module_, ifc::Environment& environment)
 {
-	return is_type_exported(template_id.primary(), environment) &&
-		std::ranges::all_of(template_id.arguments(), [&environment](reflifc::Expression arg)
-			{
-				return is_type_exported(arg, environment);
-			});
+	return is_type_visible_from_module(template_id.primary(), module_, environment) &&
+		std::ranges::all_of(template_id.arguments(), [module_ , &environment](reflifc::Expression arg)
+		{
+			return is_type_visible_from_module(arg, module_, environment);
+		});
 }
 
 reflifc::Declaration get_home_scope(const reflifc::Declaration& decl, ifc::Environment& environment)
@@ -598,5 +589,54 @@ reflifc::Declaration get_home_scope(const reflifc::Declaration& decl, ifc::Envir
 	default:
 		throw ContextualException(std::format("Cannot get the home_scope for a decl sort of: {}", 
 			magic_enum::enum_name(sort)));
+	}
+}
+
+std::optional<ifc::BasicSpecifiers> get_basic_specifiers(reflifc::Declaration declaration, ifc::Environment& environment)
+{
+	switch (declaration.sort())
+	{
+		// Decl's with BasicSpecifiers
+	case ifc::DeclSort::Scope: return declaration.as_scope().specifiers();
+	case ifc::DeclSort::Enumeration: return declaration.as_enumeration().specifiers();
+	case ifc::DeclSort::Template: return declaration.as_template().specifiers();
+	case ifc::DeclSort::PartialSpecialization: return declaration.as_partial_specialization().specifiers();
+	case ifc::DeclSort::Specialization: return get_basic_specifiers(declaration.as_specialization().entity(), environment);
+	case ifc::DeclSort::Reference: return get_basic_specifiers(declaration.as_reference().referenced_declaration(environment), environment);
+
+		// Decl's without BasicSpecifiers
+	case ifc::DeclSort::Parameter:
+	case ifc::DeclSort::UsingDirective: // Later renamed to Unused0
+	case ifc::DeclSort::Tuple: // This is a collection of ifc::Declaration's. it doesn't quite fit.
+	case ifc::DeclSort::SyntaxTree:
+	case ifc::DeclSort::Property:
+	case ifc::DeclSort::OutputSegment:
+		return std::nullopt;
+
+		// Not implemented in ifc-reader
+	case ifc::DeclSort::Bitfield:
+	case ifc::DeclSort::Temploid:
+	case ifc::DeclSort::DefaultArgument:
+	case ifc::DeclSort::Expansion:
+	case ifc::DeclSort::DeductionGuide:
+	case ifc::DeclSort::Barren:
+		// specifiers() not exposed in reflifc
+	case ifc::DeclSort::Variable:
+	case ifc::DeclSort::Field:
+	case ifc::DeclSort::Alias:
+	case ifc::DeclSort::Concept:
+	case ifc::DeclSort::Function:
+	case ifc::DeclSort::Method:
+	case ifc::DeclSort::Constructor:
+	case ifc::DeclSort::InheritedConstructor:
+	case ifc::DeclSort::Destructor:
+	case ifc::DeclSort::UsingDeclaration:
+	case ifc::DeclSort::Friend:
+	case ifc::DeclSort::Intrinsic:
+		return std::nullopt;
+
+	default:
+		throw ContextualException(std::format("Unexpected declaration while extracting BasicSpecifiers from decl. decl sort: {}",
+			magic_enum::enum_name(declaration.sort())));
 	}
 }

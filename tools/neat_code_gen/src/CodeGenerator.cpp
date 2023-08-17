@@ -160,7 +160,7 @@ void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration
 	{
 		return;
 	}
-	if (!is_type_exported(decl, *environment))
+	if (!is_type_visible_from_module(decl, reflifc::Module{ nullptr }, *environment))
 	{
 		auto typename__ = render_full_typename(decl, *environment);
 		return;
@@ -213,7 +213,7 @@ void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration
 	auto bases = scope_decl.bases();
 	for (auto base : bases)
 	{
-		if (is_type_exported(base.type, *environment))
+		if (is_type_visible_from_module(base.type, reflifc::Module{ nullptr }, *environment))
 		{
 			type.bases.push_back(base);
 			scan(base.type, out_types);
@@ -233,11 +233,12 @@ void CodeGenerator::scan(reflifc::Type type, ReflectableTypes& out_types)
 		scan(type.designation(), out_types);
 		break;
 	case ifc::TypeSort::Syntactic:
-		scan(type.as_syntactic().primary(), out_types);
-		for (auto argument : type.as_syntactic().arguments())
-		{
-			scan(argument, out_types);
-		}
+		scan(type.as_syntactic(), out_types);
+		//scan(type.as_syntactic().primary(), out_types);
+		//for (auto argument : type.as_syntactic().arguments())
+		//{
+		//	scan(argument, out_types);
+		//}
 		break;
 	case ifc::TypeSort::Pointer:
 		scan(type.as_pointer().pointee, out_types);

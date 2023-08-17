@@ -1,6 +1,7 @@
 module;
 #include "neat/ReflectPrivateMembers.h"
 #include <string>
+#include <unordered_map>
 export module TestModule1;
 
 export void MyFunc();
@@ -14,6 +15,7 @@ export struct MyBaseStruct { int health; };
 export struct MyStruct : MyBaseStruct
 {
 	double damage;
+	std::unordered_map<int, int> hash_map;
 
 	void helper_function();
 	void argumented_function(int i, int j);
