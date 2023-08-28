@@ -10,7 +10,7 @@ export struct MyStruct2 : MyBaseStruct2
 {
 	double damage;
 	unsigned int speed;
-	std::array<int, 4> four_ints;
+	std::array<int, 4> four_ints; // std::array is from #include <array> so can't be reflected
 
 	void helper_function();
 	void argumented_function(int i, int);

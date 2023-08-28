@@ -2,6 +2,7 @@
 
 #include "ContextualException.h"
 #include "IfcConversion.h"
+#include "IfcVisitor.h"
 
 #include "ifc/Type.h"
 #include "ifc/Expression.h"
@@ -30,6 +31,10 @@
 
 #include <algorithm>
 #include <format>
+#include <concepts>
+
+using namespace std::string_literals;
+using namespace std::string_view_literals;
 
 
 std::string render_full_typename(reflifc::Type type, ifc::Environment& environment)
@@ -257,8 +262,6 @@ std::string render_full_typename(reflifc::Declaration decl, ifc::Environment& en
 
 std::string render_qualifiers(ifc::Qualifiers qualifiers)
 {
-	using namespace std::string_view_literals;
-
 	constexpr auto const_rendered = "const "sv;
 	constexpr auto volatile_rendered = "volatile "sv;
 	constexpr auto longest_size = const_rendered.size() + volatile_rendered.size();
@@ -387,9 +390,8 @@ bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBa
 		default_access = Neat::Access::Public;
 		break;
 	default:
-		default_access = Neat::Access::Public;
-		//throw ContextualException(std::format("Expected a member to be part of a Class or a Struct, but it's part of a {} instead.",
-		//	magic_enum::enum_name(type));
+		throw ContextualException(std::format("Expected a member variable (Field) to be part of a Class or a Struct, but it's part of a {} instead.",
+			type_basis_to_string(type)));
 	}
 
 	const Neat::Access member_access = convert_access_enum(field_declaration.access()).value_or(default_access);
@@ -414,9 +416,8 @@ bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::Type
 		default_access = Neat::Access::Public;
 		break;
 	default:
-		default_access = Neat::Access::Public;
-		//throw ContextualException(std::format("Expected a member to be part of a Class or a Struct, but it's part of a {} instead.",
-		//	magic_enum::enum_name(type));
+		throw ContextualException(std::format("Expected a member function (Method) to be part of a Class or a Struct, but it's part of a {} instead.",
+			type_basis_to_string(type)));
 	}
 
 	const Neat::Access member_access = convert_access_enum(method_declaration.access()).value_or(default_access);
@@ -424,33 +425,74 @@ bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::Type
 	return (member_access == Neat::Access::Public || reflects_private_members);
 }
 
-bool reflects_private_members(reflifc::Declaration type_decl, ifc::Environment& environment)
+bool can_reflect_private_members(reflifc::Declaration type_decl, ifc::Environment& environment)
 {
-	for (auto expr_index : type_decl.friends())
+	for (auto expression : type_decl.friends())
 	{
-		switch (expr_index.sort())
+		if(expression.sort() == ifc::ExprSort::NamedDecl)
 		{
-		case ifc::ExprSort::NamedDecl:
-		{
-			auto named_decl = expr_index.referenced_decl();
-			if (!named_decl.is_function())
+			// If the friend declaration is a named function.
+			auto named_decl = expression.referenced_decl();
+			if (!named_decl.is_function()) {
 				return false;
+			}
+			auto function_decl = named_decl.as_function();
+			
+			// Now check if the friend is equal to: `void Neat::reflect_types_and_members()`.
 
-			// TODO OPT: Don't require allocations for these comparisons.
+			// Check if the return type is `void`.
+			auto return_type = function_decl.type().return_type();
+			if (!return_type.is_fundamental()) {
+				return false;
+			}
+			auto return_type_basis = return_type.as_fundamental().basis;
+
+			if (return_type_basis != ifc::TypeBasis::Void) {
+				return false;
+			}
+
+			// Check the parameters ().
+			auto parameter_types = function_decl.type().parameters();
+			if (!parameter_types.empty()) {
+				return false;
+			}
+
+			// Check if the name is "reflect_types_and_members".
+			auto name = function_decl.name();
+			if (!name.is_identifier()) {
+				return false;
+			}
+			auto name_str = name.as_identifier();
+			if (name_str != "reflect_types_and_members"sv) {
+				return false;
+			}
+
+			// Check if the namespace is "Neat::".
 			auto friend_name = render_namespace(named_decl, environment) + render_refered_declaration(named_decl, environment);
 			auto rendered_type = render_full_typename(named_decl.as_function().type(), environment);
-			return friend_name == "Neat::reflect_types_and_members"
-				&& rendered_type == "void ()";
-		}
-		case ifc::ExprSort::TemplateId:
-			// Not supported yet
 
-		default:
-			throw ContextualException(std::format("Unexpected expr sort in friend declaration! {}\n", 
-				magic_enum::enum_name(expr_index.sort())));
+			auto home_scope = get_home_scope(named_decl, environment);
+			if (!home_scope || !home_scope.is_scope() || !home_scope.as_scope().is_namespace()) {
+				return false;
+			}
+			auto namespace_ = home_scope.as_scope().as_namespace();
+			auto namespace_str = namespace_.name().as_identifier();
+			
+			if (namespace_str != "Neat"sv) {
+				return false;
+			}
+
+			auto home_scope_of_home_scope = get_home_scope(home_scope, environment);
+			if (home_scope_of_home_scope) { // No more parent namespaces are expected.
+				return false;
+			}
+
+			// The declaration has a friend expression to the `void Neat::reflect_types_and_members()` functions.
+			return true;
 		}
 	}
 
+	// No friend expression to `Neat::reflect_types_and_members()`.
 	return false;
 }
 
@@ -482,14 +524,25 @@ bool is_type_visible_from_module(reflifc::MethodType method, reflifc::Module mod
 
 bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module module_, ifc::Environment& environment)
 {
-	auto specifiers = get_basic_specifiers(decl, environment);
-	if (!specifiers) {
-		throw ContextualException(std::format("Unexpected declaration while extracting basic specifiers, for checking if the declaration is visible. decl sort: {}",
-			magic_enum::enum_name(decl.sort())));
-	}
-
+	ContextArea area_{ "While checking if Declaration '{}' is visible from module 'TODO Fill module name in'."sv, 
+		decl_sort_to_string(decl.sort()), 
+		// TODO: module_.unit().name() 
+	};
 	using namespace magic_enum::bitwise_operators;
-	return (magic_enum::enum_underlying(*specifiers & ifc::BasicSpecifiers::NonExported) == 0);
+
+	// TODO: Implement this.
+	const bool is_decl_in_module_import_chain = true;
+	const bool is_decl_in_direct_module = true;
+
+	auto specifiers = get_basic_specifiers(decl, environment);
+
+	if (is_decl_in_direct_module) {
+		return (magic_enum::enum_underlying(specifiers & ifc::BasicSpecifiers::IsMemberOfGlobalModule) == 0);
+	} else if(is_decl_in_module_import_chain) {
+		return (magic_enum::enum_underlying(specifiers & (ifc::BasicSpecifiers::IsMemberOfGlobalModule | ifc::BasicSpecifiers::NonExported)) == 0);
+	} else {
+		return false;
+	}
 }
 
 bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module module_, ifc::Environment& environment)
@@ -519,7 +572,7 @@ bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module modul
 		// The rest is not supported, these expressions are for internals similar to a syntax tree.
 	default:
 		throw ContextualException(std::format("Unexpected expression while checking if the type can be exported. ExprSort is: {}",
-			magic_enum::enum_name(expr.sort())));
+			expr_sort_to_string(expr.sort())));
 	}
 }
 
@@ -532,111 +585,30 @@ bool is_type_visible_from_module(reflifc::TemplateId template_id, reflifc::Modul
 		});
 }
 
+template<typename T>
+concept HasHomeScope = requires(T t) {
+	{ t.home_scope() } -> std::same_as<reflifc::Declaration>;
+};
+
 reflifc::Declaration get_home_scope(const reflifc::Declaration& decl, ifc::Environment& environment)
 {
-	switch (const auto sort = decl.sort())
-	{
-	case ifc::DeclSort::Variable:
-		return decl.as_variable().home_scope();
-	case ifc::DeclSort::Field:
-		return decl.as_field().home_scope();
-	case ifc::DeclSort::Scope:
-		return decl.as_scope().home_scope();
-	case ifc::DeclSort::Intrinsic:
-		return decl.as_intrinsic().home_scope();
-	case ifc::DeclSort::Enumeration:
-		return decl.as_enumeration().home_scope();
-	case ifc::DeclSort::Alias:
-		return decl.as_alias().home_scope();
-	case ifc::DeclSort::Template:
-		return decl.as_template().home_scope();
-	case ifc::DeclSort::Concept:
-		return decl.as_concept().home_scope();
-	case ifc::DeclSort::Function:
-		return decl.as_function().home_scope();
-	case ifc::DeclSort::Method:
-		return decl.as_method().home_scope();
-	case ifc::DeclSort::Constructor:
-		return decl.as_constructor().home_scope();
-	case ifc::DeclSort::Destructor:
-		return decl.as_destructor().home_scope();
-	case ifc::DeclSort::UsingDeclaration:
-		return decl.as_using().home_scope();
-	case ifc::DeclSort::Reference: // Reference to an external module's declaration
-		return get_home_scope(decl.as_reference().referenced_declaration(environment), environment);
+	ContextArea area_{ "While getting the home scope."sv };
 
-		// Currently unsupported:
-	case ifc::DeclSort::Bitfield:
-	case ifc::DeclSort::PartialSpecialization:
-	case ifc::DeclSort::InheritedConstructor:
-
-		// Unable to get a home_scope for these:
-	case ifc::DeclSort::Parameter:
-	case ifc::DeclSort::VendorExtension:
-	case ifc::DeclSort::Enumerator:
-	case ifc::DeclSort::Temploid:
-	//case ifc::DeclSort::ExplicitSpecialization: // Not implemented in ifc-reader
-	//case ifc::DeclSort::ExplicitInstantiation: // Not implemented in ifc-reader
-	case ifc::DeclSort::UsingDirective:
-	case ifc::DeclSort::Friend:
-	case ifc::DeclSort::Expansion:
-	case ifc::DeclSort::DeductionGuide:
-	case ifc::DeclSort::Barren:
-	case ifc::DeclSort::Tuple:
-	case ifc::DeclSort::SyntaxTree:
-	case ifc::DeclSort::Property:
-	case ifc::DeclSort::OutputSegment:
-	default:
-		throw ContextualException(std::format("Cannot get the home_scope for a decl sort of: {}", 
-			magic_enum::enum_name(sort)));
-	}
+	return visit_declaration<reflifc::Declaration>(decl, environment, 
+		[](HasHomeScope auto const& t) { return t.home_scope(); }
+	);
 }
 
-std::optional<ifc::BasicSpecifiers> get_basic_specifiers(reflifc::Declaration declaration, ifc::Environment& environment)
+template<typename T>
+concept HasBasicSpecifiers = requires(T t) {
+	{ t.specifiers() } -> std::same_as<ifc::BasicSpecifiers>;
+};
+
+ifc::BasicSpecifiers get_basic_specifiers(reflifc::Declaration decl, ifc::Environment& environment)
 {
-	switch (declaration.sort())
-	{
-		// Decl's with BasicSpecifiers
-	case ifc::DeclSort::Scope: return declaration.as_scope().specifiers();
-	case ifc::DeclSort::Enumeration: return declaration.as_enumeration().specifiers();
-	case ifc::DeclSort::Template: return declaration.as_template().specifiers();
-	case ifc::DeclSort::PartialSpecialization: return declaration.as_partial_specialization().specifiers();
-	case ifc::DeclSort::Specialization: return get_basic_specifiers(declaration.as_specialization().entity(), environment);
-	case ifc::DeclSort::Reference: return get_basic_specifiers(declaration.as_reference().referenced_declaration(environment), environment);
+	ContextArea area_{ "While getting the basic specifiers."sv };
 
-		// Decl's without BasicSpecifiers
-	case ifc::DeclSort::Parameter:
-	case ifc::DeclSort::UsingDirective: // Later renamed to Unused0
-	case ifc::DeclSort::Tuple: // This is a collection of ifc::Declaration's. it doesn't quite fit.
-	case ifc::DeclSort::SyntaxTree:
-	case ifc::DeclSort::Property:
-	case ifc::DeclSort::OutputSegment:
-		return std::nullopt;
-
-		// Not implemented in ifc-reader
-	case ifc::DeclSort::Bitfield:
-	case ifc::DeclSort::Temploid:
-	case ifc::DeclSort::DefaultArgument:
-	case ifc::DeclSort::Expansion:
-	case ifc::DeclSort::DeductionGuide:
-	case ifc::DeclSort::Barren:
-		// specifiers() not exposed in reflifc
-	case ifc::DeclSort::Variable:
-	case ifc::DeclSort::Field:
-	case ifc::DeclSort::Alias:
-	case ifc::DeclSort::Concept:
-	case ifc::DeclSort::Function:
-	case ifc::DeclSort::Method:
-	case ifc::DeclSort::Constructor:
-	case ifc::DeclSort::InheritedConstructor:
-	case ifc::DeclSort::Destructor:
-	case ifc::DeclSort::UsingDeclaration:
-	case ifc::DeclSort::Friend:
-	case ifc::DeclSort::Intrinsic:
-		return std::nullopt;
-
-	default:
-		throw ContextualException(std::format("Unexpected declaration while extracting BasicSpecifiers from decl. decl sort: {}",
-			magic_enum::enum_name(declaration.sort())));
-	}
+	return visit_declaration<ifc::BasicSpecifiers>(decl, environment,
+		[] (HasBasicSpecifiers auto const& t) { return t.specifiers(); }
+	);
 }

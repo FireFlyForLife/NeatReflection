@@ -30,11 +30,11 @@ public:
 	MyClass() : i(42), d(5.0) {}
 
 	int i;
-	NonExportedClass ptr_to_unexported;
-	NonExportedClass return_unexpected() { return NonExportedClass{}; }
-	void unexpected_param(NonExportedClass) {}
-	void unexpected_params(NonExportedClass a, NonExportedClass b) { (void)a; (void)b; }
-	void half_unexpected_params(int a, NonExportedClass b) { (void)a; (void)b; }
+	NonExportedClass unexported_class;
+	NonExportedClass return_unexported() { return NonExportedClass{}; }
+	void unexported_param(NonExportedClass) {}
+	void unexported_params(NonExportedClass a, NonExportedClass b) { (void)a; (void)b; }
+	void half_unexported_params(int a, NonExportedClass b) { (void)a; (void)b; }
 
 private:
 	void modify_d() { d = 0.42; }

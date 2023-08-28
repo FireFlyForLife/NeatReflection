@@ -1,4 +1,4 @@
-﻿cmake_minimum_required (VERSION 3.24)
+﻿cmake_minimum_required (VERSION 3.26)
 
 project (NeatReflection)
 
@@ -49,7 +49,7 @@ function(add_reflection_target reflection_data_target_name target_name)
         add_custom_command(OUTPUT ${_REFLECTION_TARGET_SOURCE}
             COMMAND ${NEAT_REFLECTION_CODEGEN_EXE} ARGS "${_TARGET__BMI_FILE}" "${_REFLECTION_TARGET_SOURCE}"
             WORKING_DIRECTORY "${_TARGET__BINARY_DIR}"
-            DEPENDS ${_TARGET__SOURCE})
+            DEPENDS "${_TARGET__SOURCE}" "${_TARGET__BMI_FILE}" "${NEAT_REFLECTION_CODEGEN_EXE}")
 
     endforeach()
     

@@ -33,7 +33,7 @@ std::string render_neat_access_enum(Neat::Access access);
 
 bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBasis type, bool reflects_private_members, ifc::Environment& environment);
 bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::TypeBasis type, bool reflects_private_members, ifc::Environment& environment);
-bool reflects_private_members(reflifc::Declaration type_decl, ifc::Environment& environment);
+bool can_reflect_private_members(reflifc::Declaration type_decl, ifc::Environment& environment);
 bool is_type_visible_from_module(reflifc::Type type, reflifc::Module, ifc::Environment& environment);
 bool is_type_visible_from_module(reflifc::MethodType method, reflifc::Module, ifc::Environment& environment);
 bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module, ifc::Environment& environment);
@@ -41,4 +41,4 @@ bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module, ifc:
 bool is_type_visible_from_module(reflifc::TemplateId template_id, reflifc::Module, ifc::Environment& environment);
 
 reflifc::Declaration get_home_scope(const reflifc::Declaration& decl, ifc::Environment& environment);
-std::optional<ifc::BasicSpecifiers> get_basic_specifiers(reflifc::Declaration declaration, ifc::Environment& environment);
+ifc::BasicSpecifiers get_basic_specifiers(reflifc::Declaration decl, ifc::Environment& environment);

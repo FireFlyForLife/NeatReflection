@@ -2,6 +2,7 @@ add_library(NeatReflectionIfcProcessingUtilities
 	"include/ContextualException.h" "src/ContextualException.cpp" 
 	"include/IfcRendering.h" "src/IfcRendering.cpp" 
 	"include/IfcConversion.h" "src/IfcConversion.cpp" 
+	"include/IfcVisitor.h" 
 	"include/StringOperations.h" "src/StringOperations.cpp"
 	"include/MioBlobHolder.h")
 target_include_directories(NeatReflectionIfcProcessingUtilities PUBLIC "include")

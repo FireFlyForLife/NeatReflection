@@ -1,3 +1,4 @@
+module;
 #include "catch2/catch_all.hpp"
 #include "neat/Reflection.h"
 
@@ -5,8 +6,8 @@
 #include <string>
 #include <vector>
 #include <array>
+module TestModule1;
 
-import TestModule1;
 import TestModule2;
 
 
@@ -90,16 +91,24 @@ TEST_CASE("Types have correct data")
 		CHECK(type->name == "MyClass");
 		CHECK(type->id == Neat::get_id<MyClass>());
 		CHECK(type->bases.empty());
-		REQUIRE(type->fields.size() == 2);
+		REQUIRE(type->fields.size() == 3);
 		check_field(type->fields[0], type->id, Neat::get_id<int>(), "i");
-		check_field(type->fields[1], type->id, Neat::get_id<double>(), "d");
-		REQUIRE(type->methods.size() == 1);
-		check_method(type->methods[0], type->id, Neat::get_id<void>(), "modify_d", {});
+		check_field(type->fields[1], type->id, Neat::get_id<NonExportedClass>(), "unexported_class"); 
+		check_field(type->fields[2], type->id, Neat::get_id<double>(), "d");
+		REQUIRE(type->methods.size() == 5);
+		check_method(type->methods[0], type->id, Neat::get_id<NonExportedClass>(), "return_unexported", {});
+		check_method(type->methods[1], type->id, Neat::get_id<void>(), "unexported_param", { Neat::get_id<NonExportedClass>() });
+		check_method(type->methods[2], type->id, Neat::get_id<void>(), "unexported_params", { Neat::get_id<NonExportedClass>(), Neat::get_id<NonExportedClass>() });
+		check_method(type->methods[3], type->id, Neat::get_id<void>(), "half_unexported_params", { Neat::get_id<int>(), Neat::get_id<NonExportedClass>() });
+		check_method(type->methods[4], type->id, Neat::get_id<void>(), "modify_d", {});
 	}
 
 	SECTION("NonExportedClass") {
 		const Neat::Type* type = Neat::get_type("NonExportedClass");
-		CHECK(type == nullptr);
+		REQUIRE(type != nullptr);
+
+		CHECK(type->name == "NonExportedClass");
+		CHECK(type->id == Neat::get_id<NonExportedClass>());
 	}
 
 	SECTION("ClassWithUnreflectedPrivates") {
@@ -133,10 +142,9 @@ TEST_CASE("Types have correct data")
 		CHECK(type->id == Neat::get_id<MyStruct2>());
 		const std::vector<Neat::BaseClass> type_expected_bases{ { Neat::get_id<MyBaseStruct2>(), Neat::Access::Public } };
 		CHECK(type->bases == type_expected_bases);
-		REQUIRE(type->fields.size() == 3);
+		REQUIRE(type->fields.size() == 2);
 		check_field(type->fields[0], type->id, Neat::get_id<double>(), "damage");
 		check_field(type->fields[1], type->id, Neat::get_id<unsigned int>(), "speed");
-		check_field(type->fields[2], type->id, Neat::get_id<std::array<int, 4>>(), "four_ints");
 
 		REQUIRE(type->methods.size() == 3);
 		check_method(type->methods[0], type->id, Neat::get_id<void>(), "helper_function", {});
@@ -171,7 +179,10 @@ TEST_CASE("Namespaced types have correct data")
 
 	SECTION("NormalNamespace::NotExportedClass") {
 		const Neat::Type* type = Neat::get_type("NormalNamespace::NotExportedClass");
-		CHECK(type == nullptr);
+		REQUIRE(type != nullptr);
+
+		CHECK(type->name == "NormalNamespace::NotExportedClass");
+		CHECK(type->id == Neat::get_id<NormalNamespace::NotExportedClass>());
 	}
 }
 

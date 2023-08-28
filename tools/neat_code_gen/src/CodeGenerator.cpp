@@ -171,7 +171,7 @@ void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration
 	// Mark this type as being visited, at the end of this function we will fill in the full member info.
 	out_types.types.insert({ decl, type });
 
-	const bool reflect_privates = reflects_private_members(decl, *environment);
+	const bool reflect_privates = can_reflect_private_members(decl, *environment);
 
 	auto declarations = scope_decl.members();
 	for (auto decl : declarations)
@@ -321,7 +321,7 @@ void CodeGenerator::scan(reflifc::Expression expression, ReflectableTypes& out_t
 void CodeGenerator::render(ReflectableType& type)
 {
 	const auto type_name = render_namespace(type.decl, *environment) + type.class_struct_decl.name().as_identifier();
-	const bool reflect_privates = reflects_private_members(type.decl, *environment);
+	const bool reflect_privates = can_reflect_private_members(type.decl, *environment);
 	const bool is_class = (type.class_struct_decl.kind() == ifc::TypeBasis::Class);
 
 	std::string fields;
