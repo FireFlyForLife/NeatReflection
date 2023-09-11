@@ -31,14 +31,17 @@ std::string render_namespace(reflifc::Declaration decl, ifc::Environment& enviro
 std::string render_as_neat_access_enum(ifc::Access access, std::string_view value_for_none = "");
 std::string render_neat_access_enum(Neat::Access access);
 
-bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBasis type, bool reflects_private_members, ifc::Environment& environment);
-bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::TypeBasis type, bool reflects_private_members, ifc::Environment& environment);
-bool can_reflect_private_members(reflifc::Declaration type_decl, ifc::Environment& environment);
-bool is_type_visible_from_module(reflifc::Type type, reflifc::Module, ifc::Environment& environment);
-bool is_type_visible_from_module(reflifc::MethodType method, reflifc::Module, ifc::Environment& environment);
-bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module, ifc::Environment& environment);
-bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module, ifc::Environment& environment);
-bool is_type_visible_from_module(reflifc::TemplateId template_id, reflifc::Module, ifc::Environment& environment);
+bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBasis type, bool reflects_private_members, reflifc::Module root_module, ifc::Environment& environment);
+bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::TypeBasis type, bool reflects_private_members, reflifc::Module root_module, ifc::Environment& environment);
+bool can_reflect_private_members(reflifc::Declaration type_decl, reflifc::Module root_module, ifc::Environment& environment);
+bool is_type_visible_from_module(reflifc::Type type, reflifc::Module root_module, ifc::Environment& environment);
+bool is_type_visible_from_module(reflifc::MethodType method, reflifc::Module root_module, ifc::Environment& environment);
+bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module root_module, ifc::Environment& environment);
+bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module root_module, ifc::Environment& environment);
+bool is_type_visible_from_module(reflifc::TemplateId template_id, reflifc::Module root_module, ifc::Environment& environment);
+
+struct ModuleCache {};
+bool is_module_imported_in_module(reflifc::Module to_check, reflifc::Module module_, ifc::Environment& environment);
 
 reflifc::Declaration get_home_scope(const reflifc::Declaration& decl, ifc::Environment& environment);
 ifc::BasicSpecifiers get_basic_specifiers(reflifc::Declaration decl, ifc::Environment& environment);

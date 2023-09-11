@@ -36,30 +36,6 @@
 #include "magic_enum.hpp"
 
 
-template <class T>
-inline void hash_combine(std::size_t& seed, const T& v)
-{
-	std::hash<T> hasher;
-	seed ^= hasher(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-}
-
-size_t std::hash<reflifc::Declaration>::operator()(const reflifc::Declaration& decl) const
-{
-	// TODO: Submit patch to reflifc
-	struct HackyDeclarationData
-	{
-		ifc::File const* ifc_;
-		ifc::DeclIndex index_;
-	};
-
-	auto decl_data = (HackyDeclarationData&)decl;
-
-	size_t seed = 0;
-	hash_combine(seed, decl_data.ifc_);
-	hash_combine(seed, decl_data.index_);
-	return seed;
-}
-
 CodeGenerator::CodeGenerator(const ifc::File& ifc_file, ifc::Environment& environment)
 	: ifc_file(&ifc_file)
 	, environment(&environment)
@@ -160,7 +136,7 @@ void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration
 	{
 		return;
 	}
-	if (!is_type_visible_from_module(decl, reflifc::Module{ nullptr }, *environment))
+	if (!is_type_visible_from_module(decl, reflifc::Module{ ifc_file }, *environment))
 	{
 		auto typename__ = render_full_typename(decl, *environment);
 		return;
@@ -171,7 +147,7 @@ void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration
 	// Mark this type as being visited, at the end of this function we will fill in the full member info.
 	out_types.types.insert({ decl, type });
 
-	const bool reflect_privates = can_reflect_private_members(decl, *environment);
+	const bool reflect_privates = can_reflect_private_members(decl, reflifc::Module{ifc_file}, *environment);
 
 	auto declarations = scope_decl.members();
 	for (auto decl : declarations)
@@ -182,7 +158,7 @@ void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration
 		{
 			const auto field = decl.as_field();
 
-			if (is_member_publicly_accessible(field, scope_decl.kind(), reflect_privates, *environment))
+			if (is_member_publicly_accessible(field, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, *environment))
 			{
 				type.fields.push_back(field);
 				scan(field.type(), out_types);
@@ -193,7 +169,7 @@ void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration
 		{
 			const auto method = decl.as_method();
 			
-			if (is_member_publicly_accessible(method, scope_decl.kind(), reflect_privates, *environment))
+			if (is_member_publicly_accessible(method, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, *environment))
 			{
 				type.methods.push_back(method);
 
@@ -213,7 +189,7 @@ void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration
 	auto bases = scope_decl.bases();
 	for (auto base : bases)
 	{
-		if (is_type_visible_from_module(base.type, reflifc::Module{ nullptr }, *environment))
+		if (is_type_visible_from_module(base.type, reflifc::Module{ ifc_file }, *environment))
 		{
 			type.bases.push_back(base);
 			scan(base.type, out_types);
@@ -321,7 +297,7 @@ void CodeGenerator::scan(reflifc::Expression expression, ReflectableTypes& out_t
 void CodeGenerator::render(ReflectableType& type)
 {
 	const auto type_name = render_namespace(type.decl, *environment) + type.class_struct_decl.name().as_identifier();
-	const bool reflect_privates = can_reflect_private_members(type.decl, *environment);
+	const bool reflect_privates = can_reflect_private_members(type.decl, reflifc::Module{ ifc_file }, *environment);
 	const bool is_class = (type.class_struct_decl.kind() == ifc::TypeBasis::Class);
 
 	std::string fields;

@@ -16,8 +16,8 @@
 	)
 	FetchContent_Declare(
 		ifc-reader
-		GIT_REPOSITORY https://github.com/FireFlyForLife/ifc-reader.git
-		GIT_TAG 22ac7d9 # Latest at the time of writing
+		GIT_REPOSITORY https://github.com/AndreyG/ifc-reader.git
+		GIT_TAG be52fe40a3186499927f7a9fe1c31410b47f924c # Latest at the time of writing
 		FIND_PACKAGE_ARGS
 	)
 	FetchContent_Declare(

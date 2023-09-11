@@ -373,9 +373,9 @@ std::string render_neat_access_enum(Neat::Access access)
 	}
 }
 
-bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBasis type, bool reflects_private_members, ifc::Environment& environment)
+bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBasis type, bool reflects_private_members, reflifc::Module root_module, ifc::Environment& environment)
 {
-	if (!is_type_visible_from_module(field_declaration.type(), reflifc::Module{nullptr}, environment))
+	if (!is_type_visible_from_module(field_declaration.type(), root_module, environment))
 	{
 		return false;
 	}
@@ -399,9 +399,9 @@ bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBa
 	return (member_access == Neat::Access::Public || reflects_private_members);
 }
 
-bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::TypeBasis type, bool reflects_private_members, ifc::Environment& environment)
+bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::TypeBasis type, bool reflects_private_members, reflifc::Module root_module, ifc::Environment& environment)
 {
-	if (!is_type_visible_from_module(method_declaration.type(), reflifc::Module{nullptr}, environment))
+	if (!is_type_visible_from_module(method_declaration.type(), root_module, environment))
 	{
 		return false;
 	}
@@ -425,7 +425,7 @@ bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::Type
 	return (member_access == Neat::Access::Public || reflects_private_members);
 }
 
-bool can_reflect_private_members(reflifc::Declaration type_decl, ifc::Environment& environment)
+bool can_reflect_private_members(reflifc::Declaration type_decl, reflifc::Module root_module, ifc::Environment& environment)
 {
 	for (auto expression : type_decl.friends())
 	{
@@ -496,43 +496,44 @@ bool can_reflect_private_members(reflifc::Declaration type_decl, ifc::Environmen
 	return false;
 }
 
-bool is_type_visible_from_module(reflifc::Type type, reflifc::Module module_, ifc::Environment& environment)
+bool is_type_visible_from_module(reflifc::Type type, reflifc::Module root_module, ifc::Environment& environment)
 {
 	switch (type.sort())
 	{
 	case ifc::TypeSort::Fundamental:
 		return true;
 	case ifc::TypeSort::Designated:
-		return is_type_visible_from_module(type.designation(), module_, environment);
+		return is_type_visible_from_module(type.designation(), root_module, environment);
 	case ifc::TypeSort::Syntactic:
-		return is_type_visible_from_module(type.as_syntactic(), module_, environment);
+		return is_type_visible_from_module(type.as_syntactic(), root_module, environment);
 	case ifc::TypeSort::Method:
-		return is_type_visible_from_module(type.as_method(), module_, environment);
+		return is_type_visible_from_module(type.as_method(), root_module, environment);
 	case ifc::TypeSort::Qualified:
-		return is_type_visible_from_module(type.as_qualified().unqualified(), module_, environment);
+		return is_type_visible_from_module(type.as_qualified().unqualified(), root_module, environment);
 	default:
 		throw ContextualException(std::format("Unexpected type while checking if the type was exported. type sort: {}",
 			magic_enum::enum_name(type.sort())));
 	}
 }
 
-bool is_type_visible_from_module(reflifc::MethodType method, reflifc::Module module_, ifc::Environment& environment)
+bool is_type_visible_from_module(reflifc::MethodType method, reflifc::Module root_module, ifc::Environment& environment)
 {
-	return is_type_visible_from_module(method.return_type(), module_, environment) &&
-		std::ranges::all_of(method.parameters(), [module_, &environment](reflifc::Type type) { return is_type_visible_from_module(type, module_, environment); });
+	return is_type_visible_from_module(method.return_type(), root_module, environment) &&
+		std::ranges::all_of(method.parameters(), [root_module, &environment](reflifc::Type type) { return is_type_visible_from_module(type, root_module, environment); });
 }
 
-bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module module_, ifc::Environment& environment)
+bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module root_module, ifc::Environment& environment)
 {
 	ContextArea area_{ "While checking if Declaration '{}' is visible from module 'TODO Fill module name in'."sv, 
 		decl_sort_to_string(decl.sort()), 
-		// TODO: module_.unit().name() 
+		root_module.unit().name() 
 	};
 	using namespace magic_enum::bitwise_operators;
 
-	// TODO: Implement this.
-	const bool is_decl_in_module_import_chain = true;
-	const bool is_decl_in_direct_module = true;
+	auto decl_module = reflifc::Module{ decl.containing_file() };
+
+	const bool is_decl_in_module_import_chain = is_module_imported_in_module(decl_module, root_module, environment);
+	const bool is_decl_in_direct_module = (decl_module == root_module);
 
 	auto specifiers = get_basic_specifiers(decl, environment);
 
@@ -545,16 +546,16 @@ bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module modu
 	}
 }
 
-bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module module_, ifc::Environment& environment)
+bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module root_module, ifc::Environment& environment)
 {
 	switch (expr.sort())
 	{
 	case ifc::ExprSort::NamedDecl:
-		return is_type_visible_from_module(expr.referenced_decl(), module_, environment);
+		return is_type_visible_from_module(expr.referenced_decl(), root_module, environment);
 	case ifc::ExprSort::Type:
-		return is_type_visible_from_module(expr.as_type(), module_, environment);
+		return is_type_visible_from_module(expr.as_type(), root_module, environment);
 	case ifc::ExprSort::TemplateId:
-		return is_type_visible_from_module(expr.as_template_id(), module_, environment);
+		return is_type_visible_from_module(expr.as_template_id(), root_module, environment);
 	case ifc::ExprSort::Literal:
 		return true; // ifc::LiteralSort only has the types uint32, uint64 or double. Each of these types are always visible. 
 	case ifc::ExprSort::Empty:
@@ -576,13 +577,49 @@ bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module modul
 	}
 }
 
-bool is_type_visible_from_module(reflifc::TemplateId template_id, reflifc::Module module_, ifc::Environment& environment)
+bool is_type_visible_from_module(reflifc::TemplateId template_id, reflifc::Module root_module, ifc::Environment& environment)
 {
-	return is_type_visible_from_module(template_id.primary(), module_, environment) &&
-		std::ranges::all_of(template_id.arguments(), [module_ , &environment](reflifc::Expression arg)
+	return is_type_visible_from_module(template_id.primary(), root_module, environment) &&
+		std::ranges::all_of(template_id.arguments(), [root_module , &environment](reflifc::Expression arg)
 		{
-			return is_type_visible_from_module(arg, module_, environment);
+			return is_type_visible_from_module(arg, root_module, environment);
 		});
+}
+
+static bool is_module_imported_in_exported_module(reflifc::Module to_check, reflifc::Module root_module, ifc::Environment& environment)
+{
+	if (to_check == root_module) {
+		return true;
+	}
+
+	for (auto exported_module : root_module.exported_modules(environment)) {
+		if (is_module_imported_in_exported_module(to_check, exported_module, environment)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool is_module_imported_in_module(reflifc::Module to_check, reflifc::Module root_module, ifc::Environment& environment)
+{
+	if (to_check == root_module) {
+		return true;
+	}
+
+	// Only check imported modules on the root module.
+	for (auto imported_module : root_module.imported_modules(environment)) {
+		if (to_check == imported_module) {
+			return true;
+		}
+	}
+
+	// Recursively check 
+	if (is_module_imported_in_exported_module(to_check, root_module, environment)) {
+		return true;
+	}
+
+	return false;
 }
 
 template<typename T>

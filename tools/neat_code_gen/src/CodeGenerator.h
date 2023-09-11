@@ -25,16 +25,6 @@ namespace ifc
 	class Environment;
 }
 
-namespace std
-{
-	template<>
-	struct hash<reflifc::Declaration>
-	{
-		size_t operator()(const reflifc::Declaration& decl) const;
-	};
-}
-
-
 class CodeGenerator
 {
 public:
