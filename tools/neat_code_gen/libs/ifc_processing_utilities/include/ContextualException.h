@@ -45,9 +45,6 @@ private:
 	std::format_args args;
 };
 
-// Waiting room for C++23
-#define UNREACHABLE() throw ContextualException("Unreachable code path has been hit.")
-
 
 // Implementation
 // ============================================================================

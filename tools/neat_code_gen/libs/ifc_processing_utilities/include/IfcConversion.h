@@ -17,3 +17,5 @@ std::string_view decl_sort_to_string(ifc::DeclSort);
 std::string_view type_sort_to_string(ifc::TypeSort);
 std::string_view expr_sort_to_string(ifc::ExprSort);
 std::string_view type_basis_to_string(ifc::TypeBasis);
+std::string_view type_precicion_to_string(ifc::TypePrecision);
+std::string_view type_sign_to_string(ifc::TypeSign);

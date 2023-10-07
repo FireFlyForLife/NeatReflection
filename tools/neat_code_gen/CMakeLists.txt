@@ -17,13 +17,7 @@
 	FetchContent_Declare(
 		ifc-reader
 		GIT_REPOSITORY https://github.com/AndreyG/ifc-reader.git
-		GIT_TAG be52fe40a3186499927f7a9fe1c31410b47f924c # Latest at the time of writing
-		FIND_PACKAGE_ARGS
-	)
-	FetchContent_Declare(
-		magic_enum
-		GIT_REPOSITORY https://github.com/Neargye/magic_enum.git
-		GIT_TAG v0.8.2
+		GIT_TAG 1906ccf036d08b345b4d9204f72e6d6a45ccd435 # Latest at the time of writing
 		FIND_PACKAGE_ARGS
 	)
 	FetchContent_Declare(
@@ -40,7 +34,7 @@
 	)
 
 	message(STATUS "[NeatReflection] Fetching third party code gen dependencies with FetchContent_MakeAvailable. This might take a few minutes...")
-	FetchContent_MakeAvailable(docopt ifc-reader magic_enum mio nlohmann_json)
+	FetchContent_MakeAvailable(docopt ifc-reader mio nlohmann_json)
 
 	add_subdirectory("${ifc-reader_SOURCE_DIR}/lib/msvc" "${ifc-reader_BINARY_DIR}/lib/msvc") # Build `ifc-msvc` component from the `ifc-reader` repository
 

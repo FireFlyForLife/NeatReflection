@@ -1,6 +1,7 @@
 #include "CodeGenerator.h"
 
 #include "ContextualException.h"
+#include "IfcConversion.h"
 #include "IfcRendering.h"
 #include "StringOperations.h"
 
@@ -33,14 +34,12 @@
 #include "ifc/File.h"
 #include "ifc/Environment.h"
 
-#include "magic_enum.hpp"
-
 
 CodeGenerator::CodeGenerator(const ifc::File& ifc_file, ifc::Environment& environment)
 	: ifc_file(&ifc_file)
 	, environment(&environment)
 {
-	code.reserve(1024);
+	code.reserve(4096);
 }
 
 void CodeGenerator::write_cpp_file(reflifc::Module module, std::ostream& out)
@@ -266,7 +265,7 @@ void CodeGenerator::scan(reflifc::Type type, ReflectableTypes& out_types)
 
 	default:
 		throw ContextualException(std::format("Unexpected type sort encountered while scanning: {}", 
-			magic_enum::enum_name(type.sort())));
+			type_sort_to_string(type.sort())));
 	}
 }
 

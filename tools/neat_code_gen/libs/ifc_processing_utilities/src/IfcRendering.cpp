@@ -27,8 +27,6 @@
 #include "reflifc/type/Qualified.h"
 #include "reflifc/type/Reference.h"
 
-#include "magic_enum.hpp"
-
 #include <algorithm>
 #include <format>
 #include <concepts>
@@ -85,8 +83,7 @@ std::string render_full_typename(reflifc::Type type, ifc::Environment& environme
 	case ifc::TypeSort::SyntaxTree: // General parse tree representation. Seems to complicated to support
 
 	default:
-		//assert(false && "Not supported yet");
-		return std::format("<UNSUPPORTED_TYPE {}>", magic_enum::enum_name(type.sort()));
+		return std::format("<UNSUPPORTED_TYPE {}>", type_sort_to_string(type.sort()));
 	}
 }
 
@@ -146,10 +143,9 @@ std::string render_full_typename(const ifc::FundamentalType& type)
 		{
 			return "char32_t";
 		}
-	case ifc::TypePrecision::Bit128:
-		rendered += std::format("<UNEXPECTED_BITNESS {}>",
-			magic_enum::enum_name(type.precision));
-		break;
+	default:
+		throw ContextualException{ std::format("Unexpected bitness '{}'. While rendering fundamental type.",
+			type_precicion_to_string(type.precision)) };
 	}
 
 	switch (type.basis)
@@ -176,9 +172,8 @@ std::string render_full_typename(const ifc::FundamentalType& type)
 		rendered += "double";
 		break;
 	default:
-		rendered += std::format("<UNEXPECTED_FUNCAMENTAL_TYPE {}>",
-			magic_enum::enum_name(type.basis));
-		break;
+		throw ContextualException{ std::format("Unexpected basis '{}'. While rendering fundamental type.",
+			type_basis_to_string(type.basis)) };
 	}
 
 	return rendered;
@@ -209,8 +204,8 @@ std::string render_full_typename(reflifc::Expression expr, ifc::Environment& env
 
 		// This function is only for rendering a typename, most expression sorts are not used for that so will be ignored:
 	default:
-		throw ContextualException(std::format("Unexpected expression while rendering typename. ExprSort is: {}",
-			magic_enum::enum_name(expr.sort())));
+		throw ContextualException{ std::format("Unexpected expression while rendering typename. ExprSort is: {}",
+			expr_sort_to_string(expr.sort())) };
 	}
 }
 
@@ -230,8 +225,7 @@ std::string render_full_typename(reflifc::Literal literal)
 	case ifc::LiteralSort::FloatingPoint: // double (8 byte)
 		//return std::to_string(literal.float_value());
 	default:
-		UNREACHABLE(); // Unknown LiteralSort enum value
-		return "";
+		throw ContextualException{ std::format("Unknown literal sort value: {}", (int)literal.sort()) };
 	}
 }
 
@@ -323,8 +317,8 @@ std::string render_refered_declaration(reflifc::Declaration decl, ifc::Environme
 		return enumeration.name();
 	}
 	default:
-		throw ContextualException(std::format("Cannot render a refered declaration with unsupported DeclSort: {}.", 
-			magic_enum::enum_name(kind)));
+		throw ContextualException{ std::format("Cannot render a refered declaration with unsupported DeclSort: {}.",
+			decl_sort_to_string(kind)) };
 	}
 }
 
@@ -511,8 +505,8 @@ bool is_type_visible_from_module(reflifc::Type type, reflifc::Module root_module
 	case ifc::TypeSort::Qualified:
 		return is_type_visible_from_module(type.as_qualified().unqualified(), root_module, environment);
 	default:
-		throw ContextualException(std::format("Unexpected type while checking if the type was exported. type sort: {}",
-			magic_enum::enum_name(type.sort())));
+		throw ContextualException{ std::format("Unexpected type while checking if the type was exported. type sort: {}",
+			type_sort_to_string(type.sort())) };
 	}
 }
 
@@ -528,7 +522,6 @@ bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module root
 		decl_sort_to_string(decl.sort()), 
 		root_module.unit().name() 
 	};
-	using namespace magic_enum::bitwise_operators;
 
 	auto decl_module = reflifc::Module{ decl.containing_file() };
 
@@ -537,10 +530,12 @@ bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module root
 
 	auto specifiers = get_basic_specifiers(decl, environment);
 
+	using enum ifc::BasicSpecifiers;
+
 	if (is_decl_in_direct_module) {
-		return (magic_enum::enum_underlying(specifiers & ifc::BasicSpecifiers::IsMemberOfGlobalModule) == 0);
+		return 0 == ((uint8_t)specifiers & (uint8_t)IsMemberOfGlobalModule);
 	} else if(is_decl_in_module_import_chain) {
-		return (magic_enum::enum_underlying(specifiers & (ifc::BasicSpecifiers::IsMemberOfGlobalModule | ifc::BasicSpecifiers::NonExported)) == 0);
+		return 0 == ((uint8_t)specifiers & ((uint8_t)IsMemberOfGlobalModule | (uint8_t)NonExported));
 	} else {
 		return false;
 	}
