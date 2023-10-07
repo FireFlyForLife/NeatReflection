@@ -9,12 +9,6 @@
 
 	# Third party
 	FetchContent_Declare(
-		docopt
-		GIT_REPOSITORY https://github.com/docopt/docopt.cpp.git
-		GIT_TAG v0.6.3
-		FIND_PACKAGE_ARGS
-	)
-	FetchContent_Declare(
 		ifc-reader
 		GIT_REPOSITORY https://github.com/AndreyG/ifc-reader.git
 		GIT_TAG 1906ccf036d08b345b4d9204f72e6d6a45ccd435 # Latest at the time of writing
@@ -34,7 +28,7 @@
 	)
 
 	message(STATUS "[NeatReflection] Fetching third party code gen dependencies with FetchContent_MakeAvailable. This might take a few minutes...")
-	FetchContent_MakeAvailable(docopt ifc-reader mio nlohmann_json)
+	FetchContent_MakeAvailable(ifc-reader mio nlohmann_json)
 
 	add_subdirectory("${ifc-reader_SOURCE_DIR}/lib/msvc" "${ifc-reader_BINARY_DIR}/lib/msvc") # Build `ifc-msvc` component from the `ifc-reader` repository
 
@@ -47,7 +41,7 @@
 	add_executable(NeatReflectionCodeGen "src/Main.cpp" "src/CodeGenerator.h" "src/CodeGenerator.cpp")
 	target_compile_features(NeatReflectionCodeGen PUBLIC cxx_std_20)
 	target_include_directories(NeatReflectionCodeGen PRIVATE "src")
-	target_link_libraries(NeatReflectionCodeGen PUBLIC NeatReflectionIfcProcessingUtilities docopt_s ifc-msvc)
+	target_link_libraries(NeatReflectionCodeGen PUBLIC NeatReflectionIfcProcessingUtilities ifc-msvc)
 	set_target_properties(NeatReflectionCodeGen PROPERTIES FOLDER "Neat/Tools")
 
 	message(DEBUG "[NeatReflection] Using NeatReflectionCodeGen built from source.")
