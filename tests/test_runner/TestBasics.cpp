@@ -198,9 +198,9 @@ TEST_CASE("Read field values")
 		auto& field = type->fields[0];
 		REQUIRE(field.name == "health");
 
-		auto value = field.get_reference(&my_struct);
+		auto value = field.get_value({ &my_struct, type });
 		REQUIRE(value.has_value());
-		auto value_int = std::any_cast<std::reference_wrapper<int>>(&value);
+		auto value_int = std::any_cast<int>(&value);
 		REQUIRE(value_int != nullptr);
 		
 		REQUIRE(*value_int == 7);
@@ -216,9 +216,9 @@ TEST_CASE("Read field values")
 		auto& field = type->fields[0];
 		REQUIRE(field.name == "damage");
 
-		auto value = field.get_reference(&my_struct);
+		auto value = field.get_value({ &my_struct, type });
 		REQUIRE(value.has_value());
-		auto value_double = std::any_cast<std::reference_wrapper<double>>(&value);
+		auto value_double = std::any_cast<double>(&value);
 		REQUIRE(value_double != nullptr);
 
 		REQUIRE(*value_double == Catch::Approx(42.0));
@@ -239,7 +239,7 @@ TEST_CASE("Write field values")
 
 		REQUIRE(my_struct.health == 0);
 
-		field.set_value(&my_struct, 7);
+		field.set_value({ &my_struct, type }, 7);
 
 		REQUIRE(my_struct.health == 7);
 	}
@@ -256,7 +256,7 @@ TEST_CASE("Write field values")
 
 		REQUIRE(my_struct.damage == Catch::Approx(0.0));
 
-		field.set_value(&my_struct, 42.0);
+		field.set_value({ &my_struct, type }, 42.0);
 
 		REQUIRE(my_struct.damage == Catch::Approx(42.0));
 	}
@@ -273,7 +273,7 @@ TEST_CASE("Invoke method")
 	auto& method = type->methods[2];
 	REQUIRE(method.name == "get_42");
 
-	auto value = method.invoke(&my_struct, {});
+	auto value = method.invoke({ &my_struct, type }, {});
 	REQUIRE(value.has_value());
 	auto value_int = std::any_cast<int>(&value);
 	REQUIRE(value_int != nullptr);

@@ -33,7 +33,7 @@ TEST_CASE("Invoke method2")
 	REQUIRE(method != nullptr);
 
 	std::array<std::any, 2> args{ 4, 5 };
-	method->invoke(&method_tester, args);
+	method->invoke({ &method_tester, type }, args);
 
 	CHECK(method_tester.test_method_2_args == "4,5");
 }
@@ -48,7 +48,7 @@ TEST_CASE("Invoke method return")
 	auto method = find_method(*type, "TestMethodReturn");
 	REQUIRE(method != nullptr);
 
-	auto result = method->invoke(&method_tester, {});
+	auto result = method->invoke({ &method_tester, type }, {});
 
 	REQUIRE(result.has_value());
 	auto result_int = std::any_cast<int>(&result);
@@ -66,7 +66,7 @@ TEST_CASE("Invoke const method return")
 	auto method = find_method(*type, "TestMethodConstReturn");
 	REQUIRE(method != nullptr);
 
-	auto result = method->invoke(&method_tester, {});
+	auto result = method->invoke({ &method_tester, type }, {});
 
 	REQUIRE(result.has_value());
 	auto result_int = std::any_cast<int>(&result);

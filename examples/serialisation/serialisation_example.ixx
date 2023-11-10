@@ -1,21 +1,24 @@
-module;
-#include "neat/Reflection.h"
-
-#include "nlohmann/json.hpp"
-
-#include <charconv>
-#include <string>
-#include <iostream>
-#include <cassert>
 export module SerialisationExample;
+import "neat/Reflection.h";
+import "nlohmann/json.hpp";
+import <string>;
+import <vector>;
+import <iostream>;
+import <cassert>;
 
 // Types
 // ============================================================================
+
+export struct SubObject {
+    int id;
+    double factor;
+};
 
 export struct MyData {
     std::string name;
     int health;
     double damage;
+    SubObject sub_object;
 
     std::vector<int> ids;
     std::vector<std::string> items;
@@ -27,19 +30,23 @@ using json = nlohmann::json;
 // Functions
 // ============================================================================
 
-json serialise(std::any object)
+json serialise(Neat::AnyPtr object)
 {
-    if (auto typed_object = std::any_cast<std::reference_wrapper<int>>(&object))
+    if (object.type == Neat::get_type<int>())
     {
-        return typed_object->get();
+        return *static_cast<int*>(object.value_ptr);
     }
-    else if (auto typed_object = std::any_cast<std::reference_wrapper<double>>(&object))
+    else if (object.type == Neat::get_type<float>())
     {
-        return typed_object->get();
+        return *static_cast<float*>(object.value_ptr);
     }
-    else if (auto typed_object = std::any_cast<std::reference_wrapper<std::string>>(&object))
+    else if (object.type == Neat::get_type<double>())
     {
-        return typed_object->get();
+        return *static_cast<double*>(object.value_ptr);
+    }
+    else if (object.type == Neat::get_type<std::string>())
+    {
+        return *static_cast<std::string*>(object.value_ptr);
     }
     else
     {
@@ -47,7 +54,7 @@ json serialise(std::any object)
     }
 }
 
-void deserialise(void* object, const Neat::Field& field, const json& data)
+void deserialise(Neat::AnyPtr object, const Neat::Field& field, const json& data)
 {
     if (data.is_null())
     {
@@ -103,24 +110,25 @@ export void serialisation_example()
         .ids = {3, 5, 7, 11},
         .items = {"Bucket", "Battery", "Shovel"}
     };
-
     const Neat::Type* type = Neat::get_type<MyData>();
+    Neat::AnyPtr my_data_serialisation_ptr{ &data, type };
 
+    // Serialise
     json field_data{};
     for (const auto& field : type->fields)
     {
-        field_data.emplace(field.name, serialise(field.get_reference(&data)));
+        field_data.emplace(field.name, serialise(field.get_address(my_data_serialisation_ptr)));
     }
 
     std::cout << type->name << ": " << field_data << '\n';
 
-
-    // TODO: Call constructor from reflection
-    MyData object{};
+    // Deserialise
+    MyData object{}; // TODO: Call constructor from reflection
+    Neat::AnyPtr my_data_deserialisation_ptr{ &object, type };
 
     for (auto& field : type->fields)
     {
-        deserialise(&object, field, field_data[field.name]);
+        deserialise(my_data_deserialisation_ptr, field, field_data[field.name]);
     }
 
     std::cout << "End!\n";

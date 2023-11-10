@@ -11,7 +11,7 @@ namespace Neat
 	{
 		if (has_value() && type()->destructor)
 		{
-			type()->destructor(object_pointer());
+			type()->destructor({ object_pointer(), type() });
 		}
 
 		if (storage_type() == Detail::AnyStorageType::BoxedValue)
