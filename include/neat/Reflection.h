@@ -4,6 +4,7 @@
 #include "neat/ReflectPrivateMembers.h"
 
 #include <any>
+#include <variant>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -21,10 +22,12 @@
 // Forward Declarations
 namespace Neat
 {
+	struct AnyPtr;
 	struct Type;
+	struct BaseClass;
 	struct Field;
 	struct Method;
-	struct BaseClass;
+	struct TemplateArgument;
 }
 
 
@@ -74,10 +77,11 @@ namespace Neat
 		std::vector<BaseClass> bases;
 		std::vector<Field> fields;
 		std::vector<Method> methods;
+		std::vector<TemplateArgument> template_arguments;
 
 		// Operators
 		bool operator==(const Type& other) const noexcept = default;
-		std::strong_ordering operator<=>(const Type& other) const noexcept;
+		REFL_API std::strong_ordering operator<=>(const Type& other) const noexcept;
 	};
 
 	struct BaseClass
@@ -113,7 +117,7 @@ namespace Neat
 
 		// Operators
 		bool operator==(const Field& other) const noexcept = default;
-		std::strong_ordering operator<=>(const Field& other) const noexcept;
+		REFL_API std::strong_ordering operator<=>(const Field& other) const noexcept;
 	};
 
 	struct Method
@@ -136,7 +140,12 @@ namespace Neat
 
 		// Operators
 		bool operator==(const Method& other) const noexcept = default;
-		std::strong_ordering operator<=>(const Method& other) const noexcept;
+		REFL_API std::strong_ordering operator<=>(const Method& other) const noexcept;
+	};
+
+	struct TemplateArgument
+	{
+		std::variant<TemplateTypeId, std::any> type_or_value;
 	};
 
 	/*template<typename T>
