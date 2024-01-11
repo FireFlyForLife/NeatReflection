@@ -1,5 +1,7 @@
+// Simple and powerful runtime reflection library.
+// Illustrates how low level reflection features are implemented for libraries like RTTR or refl-cpp.
 #pragma once
-#include "neat/DllExportMacro.h"
+#include "neat/Defines.h"
 #include "neat/TemplateTypeId.h"
 #include "neat/ReflectPrivateMembers.h"
 
@@ -15,9 +17,7 @@
 #include <cassert>
 #include <cstdint>
 #include <typeindex>
-#ifdef REFL_CPP_RTTI
 #include <typeinfo>
-#endif
 
 // Forward Declarations
 namespace Neat
@@ -51,8 +51,12 @@ namespace Neat
 
 	struct AnyPtr
 	{
+		// Data
 		void* value_ptr = nullptr;
 		const Type* type = nullptr;
+
+		// Operators
+		auto operator<=>(const AnyPtr& other) const noexcept = default;
 	};
 
 	enum class Access : uint8_t { Public, Protected, Private };
@@ -71,17 +75,17 @@ namespace Neat
 		// Data
 		std::string name;
 		TemplateTypeId id;
-#ifdef REFL_CPP_RTTI
-		std::type_index rtti_type_index;
-#endif
 		std::vector<BaseClass> bases;
 		std::vector<Field> fields;
 		std::vector<Method> methods;
 		std::vector<TemplateArgument> template_arguments;
+#ifdef REFL_CPP_LANG_RTTI
+		std::type_index rtti_type_index;
+#endif
 
 		// Operators
-		bool operator==(const Type& other) const noexcept = default;
-		REFL_API std::strong_ordering operator<=>(const Type& other) const noexcept;
+		bool operator==(const Type& other) const noexcept;
+		std::strong_ordering operator<=>(const Type& other) const noexcept;
 	};
 
 	struct BaseClass
@@ -116,8 +120,8 @@ namespace Neat
 		Access access;
 
 		// Operators
-		bool operator==(const Field& other) const noexcept = default;
-		REFL_API std::strong_ordering operator<=>(const Field& other) const noexcept;
+		bool operator==(const Field& other) const noexcept;
+		std::strong_ordering operator<=>(const Field& other) const noexcept;
 	};
 
 	struct Method
@@ -139,8 +143,8 @@ namespace Neat
 		Access access;
 
 		// Operators
-		bool operator==(const Method& other) const noexcept = default;
-		REFL_API std::strong_ordering operator<=>(const Method& other) const noexcept;
+		bool operator==(const Method& other) const noexcept;
+		std::strong_ordering operator<=>(const Method& other) const noexcept;
 	};
 
 	struct TemplateArgument
@@ -267,12 +271,12 @@ namespace Neat
 			.destructor = (std::is_trivially_destructible_v<T> ? nullptr : &Detail::destructor_erased<T>),
 			.name = std::string{ name },
 			.id = id,
-#ifdef REFL_CPP_RTTI
-			.rtti_type_index = std::type_index{ typeid(T) },
-#endif
 			.bases = std::move(bases),
 			.fields = std::move(fields),
-			.methods = std::move(methods)
+			.methods = std::move(methods),
+#ifdef REFL_CPP_LANG_RTTI
+			.rtti_type_index = std::type_index{ typeid(T) }
+#endif
 		};
 	}
 
@@ -374,6 +378,66 @@ namespace Neat
 			.access = access
 		};
 	}
+
+	inline bool Type::operator==(const Type& other) const noexcept
+	{
+		return id == other.id;
+	}
+
+	inline std::strong_ordering Type::operator<=>(const Type& other) const noexcept
+	{
+		return id <=> other.id;
+	}
+
+	inline bool Field::operator==(const Field& other) const noexcept
+	{
+		return object_type == other.object_type
+			&& name == other.name;
+	}
+
+	inline std::strong_ordering Field::operator<=>(const Field& other) const noexcept
+	{
+		std::strong_ordering order;
+
+		order = (object_type <=> other.object_type);
+		if (order != 0) { return order; }
+		order = (name <=> other.name);
+
+		return order;
+	}
+
+	inline bool Method::operator==(const Method& other) const noexcept
+	{
+		return object_type == other.object_type
+			&& return_type == other.return_type
+			&& argument_types == other.argument_types
+			&& name == other.name;
+	}
+
+	inline std::strong_ordering Method::operator<=>(const Method& other) const noexcept
+	{
+		std::strong_ordering order;
+
+		order = (object_type <=> other.object_type);
+		if (order != 0) { return order; }
+		order = (return_type <=> other.return_type);
+		if (order != 0) { return order; }
+		order = (argument_types <=> other.argument_types);
+		if (order != 0) { return order; }
+		order = (name <=> other.name);
+
+		return order;
+	}
+}
+
+namespace Neat::HashUtils
+{
+	template <typename T, typename... Rest>
+	void combine(std::size_t& seed, const T& v, const Rest&... rest)
+	{
+		seed ^= std::hash<T>{}(v)+0x9e3779b9 + (seed << 6) + (seed >> 2);
+		(combine(seed, rest), ...);
+	}
 }
 
 namespace std
@@ -384,34 +448,45 @@ namespace std
 	template<>
 	struct hash<Neat::Type>
 	{
-		size_t operator()(const Neat::Type& type) const noexcept;
+		size_t operator()(const Neat::Type& type) const noexcept
+		{
+			return type.id;
+		}
 	};
 
 	template<>
 	struct hash<Neat::Field>
 	{
-		size_t operator()(const Neat::Field& field) const;
+		size_t operator()(const Neat::Field& field) const noexcept
+		{
+			size_t h = 0;
+			Neat::HashUtils::combine(h, field.object_type, field.name);
+			return h;
+		}
 	};
 
 	template<>
 	struct hash<Neat::Method>
 	{
-		size_t operator()(const Neat::Method& method) const;
+		size_t operator()(const Neat::Method& method) const noexcept
+		{
+			size_t h = 0;
+
+			for (const auto& argument_type : method.argument_types) {
+				Neat::HashUtils::combine(h, argument_type);
+			}
+			Neat::HashUtils::combine(h, method.object_type, method.return_type, method.name);
+
+			return h;
+		}
 	};
 
 	template<>
 	struct hash<Neat::BaseClass>
 	{
-		size_t operator()(const Neat::BaseClass& base_class) const noexcept;
+		size_t operator()(const Neat::BaseClass& base_class) const noexcept
+		{
+			return base_class.base_id;
+		}
 	};
-}
-
-namespace Neat::HashUtils
-{
-	template <typename T, typename... Rest>
-	void combine(std::size_t& seed, const T& v, const Rest&... rest)
-	{
-		seed ^= std::hash<T>{}(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-		(combine(seed, rest), ...);
-	}
 }

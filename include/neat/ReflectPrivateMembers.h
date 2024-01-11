@@ -1,3 +1,4 @@
+// Marker to allow Neat Reflection to allow private access to type members.
 #pragma once
 
 namespace Neat

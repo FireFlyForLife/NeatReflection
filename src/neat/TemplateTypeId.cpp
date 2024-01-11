@@ -7,7 +7,8 @@ namespace Neat
 {
 	TemplateTypeId generate_new_type_id()
 	{
-		static std::atomic<TemplateTypeId> id_counter = 1;
+		// Reserve id 0 for invalid id's.
+		static constinit std::atomic<TemplateTypeId> id_counter = 1;
 		return id_counter.fetch_add(1, std::memory_order_relaxed);
 	}
 }

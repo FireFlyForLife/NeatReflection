@@ -34,7 +34,7 @@ namespace Neat
 
 		type_container.by_type_name[type.name] = type_container.types.size();
 		type_container.by_template_type_id[type.id] = type_container.types.size();
-#ifdef REFL_CPP_RTTI
+#ifdef REFL_CPP_LANG_RTTI
 		type_container.by_rtti_type_index[type.rtti_type_index] = type_container.types.size();
 #endif
 		type_container.types.push_back(std::move(type));
@@ -68,7 +68,7 @@ namespace Neat
 
 	const Type* get_type(std::type_index rtti_type_index)
 	{
-#ifdef REFL_CPP_RTTI
+#ifdef REFL_CPP_LANG_RTTI
 		auto it = type_container.by_rtti_type_index.find(rtti_type_index);
 		if (it != type_container.by_rtti_type_index.end()) {
 			return &type_container.types[it->second];
@@ -76,70 +76,5 @@ namespace Neat
 #endif
 		rtti_type_index;
 		return nullptr;
-	}
-
-
-	std::strong_ordering Type::operator<=>(const Type& other) const noexcept
-	{
-		return id <=> other.id;
-	}
-
-	std::strong_ordering Field::operator<=>(const Field& other) const noexcept
-	{
-		std::strong_ordering order;
-
-		order = (object_type <=> other.object_type);
-		if (order != 0) { return order; }
-		order = (name <=> other.name);
-
-		return order;
-	}
-
-	std::strong_ordering Method::operator<=>(const Method& other) const noexcept
-	{
-		std::strong_ordering order;
-
-		order = (object_type <=> other.object_type);
-		if (order != 0) { return order; }
-		order = (return_type <=> other.return_type);
-		if (order != 0) { return order; }
-		order = (argument_types <=> other.argument_types);
-		if (order != 0) { return order; }
-		order = (name <=> other.name);
-
-		return order;
-	}
-}
-
-namespace std
-{
-	size_t hash<Neat::Type>::operator()(const Neat::Type& type) const noexcept 
-	{
-		return type.id;
-	}
-
-	size_t hash<Neat::Field>::operator()(const Neat::Field& field) const 
-	{
-		size_t h = 0;
-		Neat::HashUtils::combine(h, field.object_type, field.name);
-		return h;
-	}
-
-	size_t hash<Neat::Method>::operator()(const Neat::Method& method) const 
-	{
-		size_t h = 0;
-
-		for (const auto& argument_type : method.argument_types)
-		{
-			Neat::HashUtils::combine(h, argument_type);
-		}
-		Neat::HashUtils::combine(h, method.object_type, method.return_type, method.name);
-
-		return h;
-	}
-
-	size_t hash<Neat::BaseClass>::operator()(const Neat::BaseClass& base_class) const noexcept 
-	{
-		return base_class.base_id;
 	}
 }

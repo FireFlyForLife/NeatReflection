@@ -67,7 +67,7 @@ endfunction()
 add_library (NeatReflection
     "include/neat/Reflection.h"
     "include/neat/TemplateTypeId.h"
-    "include/neat/DllExportMacro.h"
+    "include/neat/Defines.h"
     "include/neat/ReflectPrivateMembers.h"
     "include/neat/Any.h"
     "src/neat/Reflection.cpp"

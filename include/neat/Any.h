@@ -1,3 +1,5 @@
+// (WIP) A type erased value.
+// Similar idea to std::any, rttr::Variant, QVariant but with NeatReflection as the type id
 #pragma once
 #include "neat/Reflection.h"
 
