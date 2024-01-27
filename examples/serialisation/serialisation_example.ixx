@@ -32,19 +32,19 @@ using json = nlohmann::json;
 
 json serialise(Neat::AnyPtr object)
 {
-    if (object.type == Neat::get_type<int>())
+    if (object.type_id == Neat::get_id<int>())
     {
         return *static_cast<int*>(object.value_ptr);
     }
-    else if (object.type == Neat::get_type<float>())
+    else if (object.type_id == Neat::get_id<float>())
     {
         return *static_cast<float*>(object.value_ptr);
     }
-    else if (object.type == Neat::get_type<double>())
+    else if (object.type_id == Neat::get_id<double>())
     {
         return *static_cast<double*>(object.value_ptr);
     }
-    else if (object.type == Neat::get_type<std::string>())
+    else if (object.type_id == Neat::get_id<std::string>())
     {
         return *static_cast<std::string*>(object.value_ptr);
     }
@@ -61,7 +61,7 @@ void deserialise(Neat::AnyPtr object, const Neat::Field& field, const json& data
         return;
     }
 
-    std::any value{};
+    Neat::Any value{};
 
     if (field.type == Neat::get_id<int>()) 
     {
@@ -111,7 +111,7 @@ export void serialisation_example()
         .items = {"Bucket", "Battery", "Shovel"}
     };
     const Neat::Type* type = Neat::get_type<MyData>();
-    Neat::AnyPtr my_data_serialisation_ptr{ &data, type };
+    Neat::AnyPtr my_data_serialisation_ptr{ &data, type->id };
 
     // Serialise
     json field_data{};
@@ -124,7 +124,7 @@ export void serialisation_example()
 
     // Deserialise
     MyData object{}; // TODO: Call constructor from reflection
-    Neat::AnyPtr my_data_deserialisation_ptr{ &object, type };
+    Neat::AnyPtr my_data_deserialisation_ptr{ &object, type->id };
 
     for (auto& field : type->fields)
     {

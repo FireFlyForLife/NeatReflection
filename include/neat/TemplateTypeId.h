@@ -11,7 +11,7 @@ namespace Neat
 	// TemplateTypeId definition
 	using TemplateTypeId = uint32_t;
 
-	constexpr TemplateTypeId c_empty_type_id = 0;
+	inline constexpr TemplateTypeId c_empty_type_id = 0;
 
 	// Automatic type id generation
 	REFL_API TemplateTypeId generate_new_type_id();
