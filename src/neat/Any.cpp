@@ -1,50 +1,113 @@
 #include "neat/Any.h"
 
 #include <type_traits>
+#include <cassert>
 
 
 namespace Neat
 {
-	static_assert(alignof(Type) >= 4, "We store the trivial / sbo flags in the first 2 bits of the pointer.");
+	Any::Any(const Any& other) noexcept
+	{
+		// Assign other storage
+		if (other.storage_mode == StorageMode::InlineValue) {
+			memcpy(storage.inline_value, other.storage.inline_value, Storage::c_inline_storage_size);
+		} else if (other.storage_mode == StorageMode::BoxedValue) {
+			new (&storage.boxed_value) std::shared_ptr<void>{ other.storage.boxed_value };
+		}
+
+		// Assign other storage
+		template_type_id = other.template_type_id;
+		storage_mode = other.storage_mode;
+	}
+
+	Any::Any(Any&& other) noexcept
+	{
+		// Assign other storage
+		if (other.storage_mode == StorageMode::InlineValue) {
+			memcpy(storage.inline_value, other.storage.inline_value, Storage::c_inline_storage_size);
+		} else if (other.storage_mode == StorageMode::BoxedValue) {
+			new (&storage.boxed_value) std::shared_ptr<void>{ std::move(other.storage.boxed_value) };
+		}
+
+		// Assign other storage
+		template_type_id = other.template_type_id;
+		storage_mode = other.storage_mode;
+
+		// Clear other
+		other.template_type_id = c_empty_type_id;
+		other.storage_mode = StorageMode::Empty;
+	}
+
+	Any& Any::operator=(const Any& other) noexcept
+	{
+		// Self assignment check
+		if (&other == this) {
+			return *this;
+		}
+
+		// Destroy this
+		this->~Any();
+
+		// Assign other
+		new (this) Any{ other };
+
+		return *this;
+	}
+
+	Any& Any::operator=(Any&& other) noexcept
+	{
+		// Self assignment check
+		if (&other == this) {
+			return *this;
+		}
+
+		// Destroy this
+		this->~Any();
+
+		// Move assign other
+		new (this) Any{ std::move(other) };
+
+		return *this;
+	}
 
 	Any::~Any()
 	{
-		if (has_value() && type()->destructor)
-		{
-			type()->destructor({ object_pointer(), type() });
-		}
-
-		if (storage_type() == Detail::AnyStorageType::BoxedValue)
-		{
-			const auto obj_memory = object_pointer();
-			delete[] obj_memory;
+		// Destroy storage
+		if (storage_mode == StorageMode::BoxedValue) {
+			storage.boxed_value.~shared_ptr();
+		} else if (storage_mode == StorageMode::InlineValue) {
+			// SBO is limited to trivial type currently, so no destruction needs to happen
 		}
 	}
 
 	bool Any::has_value() const
 	{
-		return type_ptr != 0;
+		return storage_mode != StorageMode::Empty;
 	}
 
-	const Type* Any::type() const
+	TemplateTypeId Any::type_id() const
 	{
-		return reinterpret_cast<const Type*>(type_ptr & ~Detail::c_storage_type_mask);
+		return template_type_id;
+	}
+
+	AnyPtr Any::to_any_ptr()
+	{
+		if (!has_value()) {
+			return AnyPtr{};
+		}
+
+		return AnyPtr{ object_pointer(), template_type_id };
 	}
 
 	void* Any::object_pointer()
 	{
-		if (storage_type() == Detail::AnyStorageType::BoxedValue)
-		{
-			return *reinterpret_cast<void**>(storage.data);
+		switch (storage_mode) {
+		case StorageMode::InlineValue: return storage.inline_value;
+		case StorageMode::BoxedValue: return storage.boxed_value.get();
+		case StorageMode::Empty: return nullptr;
 		}
-		else
-		{
-			return storage.data;
-		}
-	}
 
-	Detail::AnyStorageType Any::storage_type() const
-	{
-		return static_cast<Detail::AnyStorageType>(type_ptr & Detail::c_storage_type_mask);
+		assert(false && "Unexpected AnyStorageType flag.");
+		return nullptr;
 	}
 }

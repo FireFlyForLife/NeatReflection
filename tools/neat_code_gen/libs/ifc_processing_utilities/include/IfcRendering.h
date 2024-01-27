@@ -5,6 +5,7 @@
 #include "reflifc/Module.h"
 #include "reflifc/TupleView.h"
 #include "reflifc/Type.h"
+#include "reflifc/Name.h"
 #include "ifc/Environment.h"
 #include "ifc/DeclarationFwd.h"
 
@@ -22,7 +23,15 @@ std::string render_full_typename(reflifc::TupleExpressionView tuple, ifc::Enviro
 std::string render_full_typename(reflifc::TemplateId template_id, ifc::Environment& environment);
 std::string render_full_typename(reflifc::Declaration decl, ifc::Environment& environment);
 
+std::string render_method_pointer(reflifc::MethodType type, ifc::Environment& environment);
+
+std::string render_full_typename_list(reflifc::TupleTypeView types, ifc::Environment& environment);
+
 std::string render_qualifiers(ifc::Qualifiers qualifiers);
+std::string render_function_type_traits(ifc::FunctionTypeTraits traits);
+
+std::string render_name(reflifc::Name name, ifc::Environment& environment);
+std::string render_name(reflifc::SpecializationName name, ifc::Environment& environment);
 
 std::string render_refered_declaration(reflifc::Declaration decl, ifc::Environment& environment);
 

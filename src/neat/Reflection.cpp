@@ -18,7 +18,6 @@ namespace Neat
 
 		std::unordered_map<std::string, uint32_t, string_hash, std::equal_to<>> by_type_name;
 		std::unordered_map<TemplateTypeId, uint32_t> by_template_type_id;
-		std::unordered_map<std::type_index, uint32_t> by_rtti_type_index;
 		std::vector<Type> types;
 	};
 	static TypeContainer type_container;
@@ -34,9 +33,6 @@ namespace Neat
 
 		type_container.by_type_name[type.name] = type_container.types.size();
 		type_container.by_template_type_id[type.id] = type_container.types.size();
-#ifdef REFL_CPP_LANG_RTTI
-		type_container.by_rtti_type_index[type.rtti_type_index] = type_container.types.size();
-#endif
 		type_container.types.push_back(std::move(type));
 		return type_container.types.back();
 	}
@@ -63,18 +59,6 @@ namespace Neat
 		{
 			return &type_container.types[it->second];
 		}
-		return nullptr;
-	}
-
-	const Type* get_type(std::type_index rtti_type_index)
-	{
-#ifdef REFL_CPP_LANG_RTTI
-		auto it = type_container.by_rtti_type_index.find(rtti_type_index);
-		if (it != type_container.by_rtti_type_index.end()) {
-			return &type_container.types[it->second];
-		}
-#endif
-		rtti_type_index;
 		return nullptr;
 	}
 }

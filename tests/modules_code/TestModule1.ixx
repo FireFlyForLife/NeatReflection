@@ -72,3 +72,22 @@ namespace NormalNamespace
 
 	class NotExportedClass {};
 }
+
+export class NonTrivialClass
+{
+public:
+	NonTrivialClass();
+	NonTrivialClass(int i);
+	NonTrivialClass(const NonTrivialClass& other);
+	NonTrivialClass(NonTrivialClass&& other);
+	NonTrivialClass& operator=(const NonTrivialClass& other);
+	NonTrivialClass& operator=(NonTrivialClass&& other);
+	~NonTrivialClass();
+
+	int get() const { return *data; };
+	void set(int i) { *data = i; };
+
+private:
+	int* data = nullptr;
+};
+

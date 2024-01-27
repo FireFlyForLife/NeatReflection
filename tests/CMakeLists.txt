@@ -39,7 +39,7 @@ if((PROJECT_IS_NEAT_REFLECTION OR NEAT_REFLECTION_BUILD_TESTING) AND BUILD_TESTI
 
 	add_reflection_target(NeatReflectionSomeMoreTestingTypes_ReflectionData NeatReflectionSomeMoreTestingTypes)
 
-	add_executable(NeatReflectionTestRunner "test_runner/TestBasics.cpp" "test_runner/TestMethods.cpp" "test_runner/TestHashAndComparison.cpp" "test_runner/TestExternalReference.cpp" "test_runner/TestTemplateTypeId.cpp")
+	add_executable(NeatReflectionTestRunner "test_runner/TestBasics.cpp" "test_runner/TestMethods.cpp" "test_runner/TestHashAndComparison.cpp" "test_runner/TestExternalReference.cpp" "test_runner/TestTemplateTypeId.cpp" "test_runner/TestAny.cpp")
 	target_compile_features(NeatReflectionTestRunner PUBLIC cxx_std_20)
 	target_link_libraries(NeatReflectionTestRunner PUBLIC NeatReflectionTestingTypes NeatReflectionTestingTypes_ReflectionData)
 	target_link_libraries(NeatReflectionTestRunner PRIVATE Catch2::Catch2WithMain)

@@ -5,6 +5,7 @@
 #include "ifc/DeclarationFwd.h"
 #include "ifc/TypeFwd.h"
 #include "ifc/ExpressionFwd.h"
+#include "ifc/NameFwd.h"
 
 #include <optional>
 #include <string_view>
@@ -19,3 +20,5 @@ std::string_view expr_sort_to_string(ifc::ExprSort);
 std::string_view type_basis_to_string(ifc::TypeBasis);
 std::string_view type_precicion_to_string(ifc::TypePrecision);
 std::string_view type_sign_to_string(ifc::TypeSign);
+
+std::string_view name_sort_to_string(ifc::NameSort);

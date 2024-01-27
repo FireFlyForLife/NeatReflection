@@ -32,8 +32,8 @@ TEST_CASE("Invoke method2")
 	auto method = find_method(*type, "TestMethod2");
 	REQUIRE(method != nullptr);
 
-	std::array<std::any, 2> args{ 4, 5 };
-	method->invoke({ &method_tester, type }, args);
+	std::array<Neat::Any, 2> args{ 4, 5 };
+	method->invoke({ &method_tester, type->id }, args);
 
 	CHECK(method_tester.test_method_2_args == "4,5");
 }
@@ -48,10 +48,10 @@ TEST_CASE("Invoke method return")
 	auto method = find_method(*type, "TestMethodReturn");
 	REQUIRE(method != nullptr);
 
-	auto result = method->invoke({ &method_tester, type }, {});
+	auto result = method->invoke({ &method_tester, type->id }, {});
 
 	REQUIRE(result.has_value());
-	auto result_int = std::any_cast<int>(&result);
+	auto result_int = result.value_ptr<int>();
 	REQUIRE(result_int != nullptr);
 	REQUIRE(*result_int == MethodTester::test_method_return_value);
 }
@@ -66,10 +66,10 @@ TEST_CASE("Invoke const method return")
 	auto method = find_method(*type, "TestMethodConstReturn");
 	REQUIRE(method != nullptr);
 
-	auto result = method->invoke({ &method_tester, type }, {});
+	auto result = method->invoke({ &method_tester, type->id }, {});
 
 	REQUIRE(result.has_value());
-	auto result_int = std::any_cast<int>(&result);
+	auto result_int = result.value_ptr<int>();
 	REQUIRE(result_int != nullptr);
 	REQUIRE(*result_int == MethodTester::test_method_const_return_value);
 }

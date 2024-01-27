@@ -40,3 +40,51 @@ int MethodTester::TestMethodConstReturn() const
 {
 	return test_method_const_return_value;
 }
+
+NonTrivialClass::NonTrivialClass()
+	: data(new int(0))
+{
+}
+
+NonTrivialClass::NonTrivialClass(int i)
+	: data(new int(i))
+{
+
+}
+
+NonTrivialClass::NonTrivialClass(const NonTrivialClass& other)
+	: data(new int{ *other.data })
+{
+}
+
+NonTrivialClass::NonTrivialClass(NonTrivialClass&& other)
+	: data(other.data)
+{
+	other.data = nullptr;
+}
+
+NonTrivialClass& NonTrivialClass::operator=(const NonTrivialClass& other)
+{
+	if (&other == this) {
+		return *this;
+	}
+
+	delete data;
+	data = new int(*other.data);
+}
+
+NonTrivialClass& NonTrivialClass::operator=(NonTrivialClass&& other)
+{
+	if (&other == this) {
+		return *this;
+	}
+
+	delete data;
+	data = other.data;
+	other.data = nullptr;
+}
+
+NonTrivialClass::~NonTrivialClass()
+{
+	delete data;
+}

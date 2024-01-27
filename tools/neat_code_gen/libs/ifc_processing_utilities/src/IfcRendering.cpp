@@ -254,33 +254,121 @@ std::string render_full_typename(reflifc::Declaration decl, ifc::Environment& en
 	return render_namespace(decl, environment) + render_refered_declaration(decl, environment);
 }
 
+
+std::string render_method_pointer(reflifc::MethodType type, ifc::Environment& environment)
+{
+	const auto return_type = render_full_typename(type.return_type(), environment);
+	const auto class_type = render_full_typename(type.scope(), environment);
+	const auto parameter_types = render_full_typename_list(type.parameters(), environment);
+	const auto method_traits = render_function_type_traits(type.traits());
+
+	return std::format("{0} ({1}::*)({2}) {3}", return_type, class_type, parameter_types, method_traits);
+}
+
+
+std::string render_full_typename_list(reflifc::TupleTypeView types, ifc::Environment& environment)
+{
+	auto joined_types = std::string{};
+	joined_types.reserve(types.size() * 8);
+	for (auto type_it = types.begin(); type_it != types.end(); ++type_it) {
+		if (type_it != types.begin()) {
+			joined_types += ", ";
+		}
+		joined_types += render_full_typename(*type_it, environment);
+	}
+	return joined_types;
+}
+
+
 std::string render_qualifiers(ifc::Qualifiers qualifiers)
 {
 	constexpr auto const_rendered = "const "sv;
 	constexpr auto volatile_rendered = "volatile "sv;
 	constexpr auto longest_size = const_rendered.size() + volatile_rendered.size();
 
-	std::string rendered;
+	if (qualifiers == ifc::Qualifiers::None) {
+		// Early out to avoid allocation.
+		return ""s;
+	}
 
-	if (ifc::has_qualifier(qualifiers, ifc::Qualifiers::Const))
-	{
-		rendered.reserve(longest_size);
+	std::string rendered;
+	rendered.reserve(longest_size);
+
+	if (ifc::has_qualifier(qualifiers, ifc::Qualifiers::Const)) {
 		rendered += const_rendered;
 	}
-	if (ifc::has_qualifier(qualifiers, ifc::Qualifiers::Volatile))
-	{
-		rendered.reserve(longest_size);
+	if (ifc::has_qualifier(qualifiers, ifc::Qualifiers::Volatile)) {
 		rendered += volatile_rendered;
 	}
-	if (ifc::has_qualifier(qualifiers, ifc::Qualifiers::Restrict))
-	{
+	if (ifc::has_qualifier(qualifiers, ifc::Qualifiers::Restrict)) {
 		// Ignored
 	}
 
 	return rendered;
 }
 
+std::string render_function_type_traits(ifc::FunctionTypeTraits traits)
+{
+	constexpr auto const_rendered = "const "sv;
+	constexpr auto volatile_rendered = "volatile "sv;
+	constexpr auto lvalue_rendered = "& "sv;
+	constexpr auto rvalue_rendered = "&& "sv;
+	constexpr auto longest_size = const_rendered.size() + volatile_rendered.size() + std::max(lvalue_rendered.size(), rvalue_rendered.size());
 
+	if (traits == ifc::FunctionTypeTraits::None) {
+		// Early out to avoid allocation.
+		return ""s;
+	}
+
+	std::string rendered;
+	rendered.reserve(longest_size);
+
+	if (ifc::has_trait(traits, ifc::FunctionTypeTraits::Const)) {
+		rendered += const_rendered;
+	}
+	if (ifc::has_trait(traits, ifc::FunctionTypeTraits::Volatile)) {
+		rendered += volatile_rendered;
+	}
+
+	if (ifc::has_trait(traits, ifc::FunctionTypeTraits::Lvalue)) {
+		rendered += lvalue_rendered;
+	} else if (ifc::has_trait(traits, ifc::FunctionTypeTraits::Rvalue)) {
+		rendered += rvalue_rendered;
+	}
+
+	return rendered;
+}
+
+
+std::string render_name(reflifc::Name name, ifc::Environment& environment)
+{
+	if (!name) {
+		return "";
+	}
+
+	switch (name.sort()) {
+	case ifc::NameSort::Identifier: return name.as_identifier();
+	case ifc::NameSort::Operator: return "operator"s + name.operator_name();
+	case ifc::NameSort::Literal: return name.as_literal();
+	case ifc::NameSort::Specialization: return render_name(name.as_specialization(), environment);
+		
+		// Not implemented in reflifc yet
+	case ifc::NameSort::Conversion:
+	case ifc::NameSort::Template:
+	case ifc::NameSort::SourceFile:
+	case ifc::NameSort::Guide:
+	default:
+		throw ContextualException(std::format("Could not render reflifc::Name, unsupported type: {}", 
+			name_sort_to_string(name.sort())));
+	}
+}
+
+std::string render_name(reflifc::SpecializationName name, ifc::Environment& environment)
+{
+	auto primary = render_name(name.primary(), environment);
+	auto args_rendered = render_full_typename(name.template_arguments(), environment);
+	return primary + '<' + args_rendered + '>';
+}
 
 std::string render_refered_declaration(reflifc::Declaration decl, ifc::Environment& environment)
 {
@@ -504,6 +592,12 @@ bool is_type_visible_from_module(reflifc::Type type, reflifc::Module root_module
 		return is_type_visible_from_module(type.as_method(), root_module, environment);
 	case ifc::TypeSort::Qualified:
 		return is_type_visible_from_module(type.as_qualified().unqualified(), root_module, environment);
+	case ifc::TypeSort::LvalueReference:
+		return is_type_visible_from_module(type.as_lvalue_reference().referee, root_module, environment);
+	case ifc::TypeSort::RvalueReference:
+		return is_type_visible_from_module(type.as_rvalue_reference().referee, root_module, environment);
+	case ifc::TypeSort::Pointer:
+		return is_type_visible_from_module(type.as_pointer().pointee, root_module, environment);
 	default:
 		throw ContextualException{ std::format("Unexpected type while checking if the type was exported. type sort: {}",
 			type_sort_to_string(type.sort())) };

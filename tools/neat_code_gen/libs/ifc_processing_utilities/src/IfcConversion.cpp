@@ -5,6 +5,7 @@
 #include "ifc/Declaration.h"
 #include "ifc/Expression.h"
 #include "ifc/Type.h"
+#include "ifc/Name.h"
 
 
 std::optional<Neat::Access> convert_access_enum(ifc::Access ifc_access)
@@ -233,5 +234,22 @@ std::string_view type_sign_to_string(ifc::TypeSign type_sign)
 	case ifc::TypeSign::Unsigned: return "Unsigned";
 	default:
 		throw ContextualException{ std::format("Invalid TypeSign enum value: {}", (int)type_sign) };
+	}
+}
+
+std::string_view name_sort_to_string(ifc::NameSort name_sort)
+{
+	switch(name_sort)
+	{
+	case ifc::NameSort::Identifier: return "Identifier";
+	case ifc::NameSort::Operator: return "Operator";
+	case ifc::NameSort::Conversion: return "Conversion";
+	case ifc::NameSort::Literal: return "Literal";
+	case ifc::NameSort::Template: return "Template";
+	case ifc::NameSort::Specialization: return "Specialization";
+	case ifc::NameSort::SourceFile: return "SourceFile";
+	case ifc::NameSort::Guide: return "Guide";
+	default:
+		throw ContextualException{ std::format("Invalid NameSort enum value: {}", (int)name_sort) };
 	}
 }

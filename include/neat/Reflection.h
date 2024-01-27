@@ -4,8 +4,9 @@
 #include "neat/Defines.h"
 #include "neat/TemplateTypeId.h"
 #include "neat/ReflectPrivateMembers.h"
+#include "neat/Any.h"
 
-#include <any>
+#include <array>
 #include <variant>
 #include <string>
 #include <string_view>
@@ -16,13 +17,10 @@
 #include <compare>
 #include <cassert>
 #include <cstdint>
-#include <typeindex>
-#include <typeinfo>
 
 // Forward Declarations
 namespace Neat
 {
-	struct AnyPtr;
 	struct Type;
 	struct BaseClass;
 	struct Field;
@@ -41,23 +39,12 @@ namespace Neat
 	REFL_API std::span<const Type> get_types();
 	REFL_API const Type* get_type(std::string_view type_name);
 	REFL_API const Type* get_type(TemplateTypeId type_id);
-	REFL_API const Type* get_type(std::type_index rtti_type_index);
 	template<typename T> 
 	const Type* get_type() { return get_type(get_id<T>()); }
 
 
 	// Types
 	// ===========================================================================
-
-	struct AnyPtr
-	{
-		// Data
-		void* value_ptr = nullptr;
-		const Type* type = nullptr;
-
-		// Operators
-		auto operator<=>(const AnyPtr& other) const noexcept = default;
-	};
 
 	enum class Access : uint8_t { Public, Protected, Private };
 
@@ -68,20 +55,19 @@ namespace Neat
 		static Type create(std::string_view name, TemplateTypeId id, 
 			std::vector<BaseClass> bases, std::vector<Field> fields, std::vector<Method> methods);
 
+		using DefaultConstructor = void (*)(AnyPtr uninitialised_object);
 		using Destructor = void (*)(AnyPtr object);
-
+		DefaultConstructor default_constructor;
 		Destructor destructor;
 
 		// Data
 		std::string name;
 		TemplateTypeId id;
+		size_t size;
 		std::vector<BaseClass> bases;
 		std::vector<Field> fields;
 		std::vector<Method> methods;
 		std::vector<TemplateArgument> template_arguments;
-#ifdef REFL_CPP_LANG_RTTI
-		std::type_index rtti_type_index;
-#endif
 
 		// Operators
 		bool operator==(const Type& other) const noexcept;
@@ -104,10 +90,9 @@ namespace Neat
 		template<typename TObject, typename TType, TType TObject::* PtrToMember>
 		static Field create(std::string_view name, Access access);
 
-		using GetValueFunction = std::any (*)(AnyPtr object);
-		using SetValueFunction = void (*)(AnyPtr object, std::any value);
+		using GetValueFunction = Any (*)(AnyPtr object);
+		using SetValueFunction = void (*)(AnyPtr object, Any value);
 		using GetAddressFunction = AnyPtr (*)(AnyPtr object);
-
 		GetValueFunction get_value;
 		SetValueFunction set_value;
 		GetAddressFunction get_address;
@@ -130,8 +115,7 @@ namespace Neat
 		template<auto PtrToMemberFunction, typename TObject, typename TReturn, typename... TArgs>
 		static Method create(std::string_view name, Access access);
 
-		using InvokeFunction = std::any (*)(AnyPtr object, std::span<std::any> arguments);
-		
+		using InvokeFunction = Any (*)(AnyPtr object, std::span<Any> arguments);
 		InvokeFunction invoke;
 
 		// Data
@@ -149,100 +133,8 @@ namespace Neat
 
 	struct TemplateArgument
 	{
-		std::variant<TemplateTypeId, std::any> type_or_value;
+		std::variant<TemplateTypeId, Any> type_or_value;
 	};
-
-	/*template<typename T>
-	struct VectorTrait
-	{
-		static constexpr bool is_specialised = false;
-	};
-
-	template<typename TElement>
-	struct VectorTrait<std::vector<TElement>>
-	{
-		static constexpr bool is_specialised = true;
-
-		using ElementType = TElement;
-		using ContainerType = std::vector<T>;
-		using IteratorTag = std::contiguous_iterator_tag;
-
-		static size_t size(const ContainerType& container) { return container.size(); }
-		static void set_element(ContainerType& container, size_t index, ElementType* element) { container[index] = *element; }
-		static const ElementType* get_element(const ContainerType& container, size_t index) { return &container[index]; }
-		static ElementType* get_element(ContainerType& container, size_t index) { return &container[index]; }
-
-		static void clear(ContainerType& container) { container.clear(); }
-		static void add_elements(ContainerType& container, ElementType* element) { container.push_back(*element); }
-		static void remove_element(ContainerType& container, size_t index) { container.erase(container.begin() + index); }
-	};
-
-	template<typename TElement, size_t Size>
-	struct VectorTrait<TElement[Size]>
-	{
-		static constexpr bool is_specialised = true;
-
-		using ElementType = TElement;
-		using ContainerType = TElement[Size];
-		using IteratorTag = std::contiguous_iterator_tag;
-		
-		static size_t size(const ContainerType& container) { (void)container; return Size; }
-		static void set_element(ContainerType& container, size_t index, ElementType* element) { container[index] = *element; }
-		static const ElementType* get_element(const ContainerType& container, size_t index) { return &container[index]; }
-		static ElementType* get_element(ContainerType& container, size_t index) { return &container[index]; }
-	};
-
-	template<typename T>
-	struct AssociateContainerTrait
-	{
-		static constexpr bool is_specialised = false;
-	};
-
-	template<typename TKey, typename TValue, typename THasher, typename TComparator, typename TAllocator>
-	struct AssociateContainerTrait<std::unordered_map<TKey, TValue, THasher, TComparator, TAllocator>>
-	{
-		static constexpr bool is_specialised = true;
-
-		using ElementType = std::pair<const TKey, TValue>;
-		using ContainerType = std::unordered_map<TKey, TValue, THasher, TComparator, TAllocator>;
-		using IteratorTag = std::bidirectional_iterator_tag;
-
-		static size_t size(const ContainerType& container)
-		{
-			return container.size();
-		}
-
-		static void clear(ContainerType& container)
-		{
-			container.clear();
-		}
-
-		static void set_element(ContainerType& container, TKey* key, TValue* value)
-		{
-			container.emplace(*key, *value);
-		}
-
-		static const ElementType* get_element(const ContainerType& container, const TKey* key)
-		{
-			auto it = container.find(*key);
-			return it != container.end() ? *it : nullptr;
-		}
-
-		static void erase_element(ContainerType& containre, TKey* key)
-		{
-			container.erase(*key);
-		}
-
-		static std::vector<ElementType*> get_all_elements(ContainerType& container)
-		{
-			std::vector<ElementType*> all_elements;
-			all_elements.reserve(container.size());
-			for (auto& element : container) {
-				all_elements.push_back(&element);
-			}
-			return all_elements;
-		}
-	};*/
 }
 
 
@@ -254,9 +146,17 @@ namespace Neat
 	namespace Detail
 	{
 		template<typename T>
+		void default_constructor_erased(AnyPtr uninitialised_object)
+		{
+			assert(uninitialised_object.type_id == get_id<T>());
+
+			new (uninitialised_object.value_ptr) T{};
+		}
+
+		template<typename T>
 		void destructor_erased(AnyPtr object)
 		{
-			assert(object.type == get_type<T>());
+			assert(object.type_id == get_id<T>());
 
 			T* object_ = static_cast<T*>(object.value_ptr);
 			object_->~T();
@@ -268,46 +168,45 @@ namespace Neat
 		std::vector<BaseClass> bases, std::vector<Field> fields, std::vector<Method> methods)
 	{
 		return Type{
+			.default_constructor = (std::is_default_constructible_v<T> ? &Detail::destructor_erased<T> : nullptr),
 			.destructor = (std::is_trivially_destructible_v<T> ? nullptr : &Detail::destructor_erased<T>),
 			.name = std::string{ name },
 			.id = id,
+			.size = sizeof(T),
 			.bases = std::move(bases),
 			.fields = std::move(fields),
-			.methods = std::move(methods),
-#ifdef REFL_CPP_LANG_RTTI
-			.rtti_type_index = std::type_index{ typeid(T) }
-#endif
+			.methods = std::move(methods)
 		};
 	}
 
 	namespace Detail
 	{
 		template<typename TObject, typename TType, TType TObject::* PtrToMember>
-		std::any get_field_erased(AnyPtr object)
+		Any get_field_erased(AnyPtr object)
 		{
-			assert(object.type == get_type<TObject>());
+			assert(object.type_id == get_id<TObject>());
 
 			TObject* object_ = static_cast<TObject*>(object.value_ptr);
 			return object_->*PtrToMember;
 		}
 
 		template<typename TObject, typename TType, TType TObject::* PtrToMember>
-		void set_field_erased(AnyPtr object, std::any value)
+		void set_field_erased(AnyPtr object, Any value)
 		{
-			assert(object.type == get_type<TObject>());
-			assert(std::any_cast<TType>(&value) != nullptr);
+			assert(object.type_id == get_id<TObject>());
+			assert(value.type_id() == get_id<TType>());
 
 			TObject* object_ = static_cast<TObject*>(object.value_ptr);
-			object_->*PtrToMember = std::any_cast<TType>(value);
+			object_->*PtrToMember = value.value<TType>();
 		}
 
 		template<typename TObject, typename TType, TType TObject::* PtrToMember>
 		AnyPtr get_field_address_erased(AnyPtr object)
 		{
-			assert(object.type == get_type<TObject>());
+			assert(object.type_id == get_id<TObject>());
 
 			TObject* object_ = static_cast<TObject*>(object.value_ptr);
-			return { &(object_->*PtrToMember), get_type<TType>() };
+			return { &(object_->*PtrToMember), get_id<TType>() };
 		}
 	}
 
@@ -327,29 +226,40 @@ namespace Neat
 
 	namespace Detail
 	{
+		template<size_t TTemplateArgCount>
+		inline bool validate_function_arguments(std::array<TemplateTypeId, TTemplateArgCount> template_arguments, std::span<Any> arguments)
+		{
+			if (template_arguments.size() != arguments.size()) {
+				return false;
+			}
+
+			for (size_t i = 0; i < template_arguments.size(); ++i) {
+				if (template_arguments[i] != arguments[i].type_id()) {
+					return false;
+				}
+			}
+
+			return true;
+		}
+
 		template<auto PtrToMemberFunction, typename TObject, typename TReturn, typename ...TArgs>
-		std::any invoke_erased(AnyPtr object, std::span<std::any> arguments)
+		Any invoke_erased(AnyPtr object, std::span<Any> arguments)
 		{
 			// Validate object
-			assert(object.type == get_type<TObject>());
+			assert(object.type_id == get_id<TObject>());
 			
 			// Validate arguments
-			assert(arguments.size() == sizeof...(TArgs));
-			auto check_all_argument_types = []<size_t... I>(std::span<std::any> arguments, std::index_sequence<I...>)
-			{
-				return ((std::any_cast<TArgs>(&arguments[I]) != nullptr) && ...);
-			};
-			assert(check_all_argument_types(arguments, std::index_sequence_for<TArgs...>{}));
+			assert(validate_function_arguments(std::array<TemplateTypeId, sizeof...(TArgs)>{ get_id<std::decay_t<TArgs>>()... }, arguments));
 			
 			// Invoke method
-			auto unwrap_arguments_and_invoke = []<size_t... I>(TObject * t_object, std::span<std::any> arguments, std::index_sequence<I...>)
+			auto unwrap_arguments_and_invoke = []<size_t... I>(TObject* t_object, std::span<Any> arguments, std::index_sequence<I...>)
 			{
-				return (t_object->*PtrToMemberFunction)(std::any_cast<TArgs>(arguments[I])...);
+				return (t_object->*PtrToMemberFunction)((std::move(arguments[I].value<std::decay_t<TArgs>>()))...);
 			};
 			
 			TObject* object_ = static_cast<TObject*>(object.value_ptr);
 
-			if constexpr (std::is_same_v<TReturn, void>)
+			if constexpr (std::is_void_v<TReturn>)
 			{
 				unwrap_arguments_and_invoke(object_, arguments, std::index_sequence_for<TArgs...>{});
 				return {};

@@ -35,6 +35,9 @@
 #include "ifc/Environment.h"
 
 
+using namespace std::string_literals;
+using namespace std::string_view_literals;
+
 CodeGenerator::CodeGenerator(const ifc::File& ifc_file, ifc::Environment& environment)
 	: ifc_file(&ifc_file)
 	, environment(&environment)
@@ -53,11 +56,16 @@ void CodeGenerator::write_cpp_file(reflifc::Module module, std::ostream& out)
 	const auto module_name = unit.name();
 	
 	ReflectableTypes reflectable_types{};
-	scan(module.global_namespace(), reflectable_types);
-	
-	for (auto& reflectable_type : reflectable_types.types)
 	{
-		render(reflectable_type.second);
+		ContextArea scan_area{ "While scanning for types."sv };
+		scan(module.global_namespace(), reflectable_types);
+	}
+
+	{
+		ContextArea scan_area{ "While rendering types."sv };
+		for (auto& reflectable_type : reflectable_types.types) {
+			render(reflectable_type.second);
+		}
 	}
 
 	out << std::format(
@@ -109,7 +117,7 @@ void CodeGenerator::scan(reflifc::Declaration decl, ReflectableTypes& out_types)
 
 void CodeGenerator::scan(reflifc::TemplateDeclaration template_decl, reflifc::Declaration decl, ReflectableTypes& out_types)
 {
-
+	// TODO: Implement
 }
 
 void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl, ReflectableTypes& out_types)
@@ -207,13 +215,11 @@ void CodeGenerator::scan(reflifc::Type type, ReflectableTypes& out_types)
 	case ifc::TypeSort::Designated:
 		scan(type.designation(), out_types);
 		break;
+	case ifc::TypeSort::Tor: // Compiler generated constructor
+		// TODO: Implement constructors
+		break;
 	case ifc::TypeSort::Syntactic:
 		scan(type.as_syntactic(), out_types);
-		//scan(type.as_syntactic().primary(), out_types);
-		//for (auto argument : type.as_syntactic().arguments())
-		//{
-		//	scan(argument, out_types);
-		//}
 		break;
 	case ifc::TypeSort::Pointer:
 		scan(type.as_pointer().pointee, out_types);
@@ -226,15 +232,13 @@ void CodeGenerator::scan(reflifc::Type type, ReflectableTypes& out_types)
 		break;
 	case ifc::TypeSort::Function:
 		scan(type.as_function().return_type(), out_types);
-		for (auto parameter : type.as_function().parameters())
-		{
+		for (auto parameter : type.as_function().parameters()) {
 			scan(parameter, out_types);
 		}
 		break;
 	case ifc::TypeSort::Method:
 		scan(type.as_method().return_type(), out_types);
-		for (auto parameter : type.as_method().parameters())
-		{
+		for (auto parameter : type.as_method().parameters()) {
 			scan(parameter, out_types);
 		}
 		break;
@@ -254,7 +258,6 @@ void CodeGenerator::scan(reflifc::Type type, ReflectableTypes& out_types)
 		break;
 
 		// Not currently supported:
-	case ifc::TypeSort::Tor: // Compiler generated constructor
 	case ifc::TypeSort::PointerToMember: // Not implemented yet by reflifc
 	case ifc::TypeSort::Expansion:
 	case ifc::TypeSort::Typename:
@@ -295,7 +298,7 @@ void CodeGenerator::scan(reflifc::Expression expression, ReflectableTypes& out_t
 
 void CodeGenerator::render(ReflectableType& type)
 {
-	const auto type_name = render_namespace(type.decl, *environment) + type.class_struct_decl.name().as_identifier();
+	const auto type_name = render_namespace(type.decl, *environment) + render_name(type.class_struct_decl.name(), *environment);
 	const bool reflect_privates = can_reflect_private_members(type.decl, reflifc::Module{ ifc_file }, *environment);
 	const bool is_class = (type.class_struct_decl.kind() == ifc::TypeBasis::Class);
 
@@ -345,18 +348,13 @@ std::string CodeGenerator::render_method(std::string_view outer_class_type, cons
 {
 	const auto method_type = method.type();
 	const auto return_type = render_full_typename(method_type.return_type(), *environment);
-	auto params = method_type.parameters();
-	auto param_types = std::string{ "" };
-	param_types.reserve(params.size() * 8);
-	for (auto param : params)
-	{
-		param_types += ", ";
-		param_types += render_full_typename(param, *environment);
-	}
-	const auto name = method.name().as_identifier();
+	const auto params = render_full_typename_list(method_type.parameters(), *environment);
+	const auto begin_params_delimiter = (params.empty() ? ""sv : ", "sv);
+	const auto name = render_name(method.name(), *environment);
 	const auto access = render_as_neat_access_enum(method.access());
+	const auto method_ptr_type = render_method_pointer(method_type, *environment);
 	
-	return std::format(R"(Method::create<&{0}::{3}, {0}, {1}{2}>("{3}", {4}))", outer_class_type, return_type, param_types, name, access);
+	return std::format(R"(Method::create<({6})&{0}::{4}, {0}, {1}{2}{3}>("{4}", {5}))", outer_class_type, return_type, begin_params_delimiter, params, name, access, method_ptr_type);
 }
 
 std::string CodeGenerator::render_base_class(std::string_view outer_class_type, bool outer_is_class, const reflifc::BaseType& base_class) const
