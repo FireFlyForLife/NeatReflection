@@ -4,6 +4,7 @@
 #include <string_view>
 #include <vector>
 #include <format>
+#include <source_location>
 
 
 class ContextualException : public std::exception
@@ -30,6 +31,8 @@ private:
 	mutable std::string formatted_message;
 };
 
+void verify(bool success, std::source_location source_location = std::source_location::current());
+
 template<typename... TArgs>
 class ContextArea
 {
@@ -52,6 +55,14 @@ private:
 namespace Detail
 {
 	void context_area_add_context_current_thread(std::string&& context_point);
+}
+
+inline void verify(bool success, std::source_location source_location)
+{
+	if (!success) [[unlikely]] {
+		throw ContextualException(std::format("Failed to verify statement at {}:{},{} in '{}'.",
+			source_location.function_name(), source_location.line(), source_location.column(), source_location.file_name()));
+	}
 }
 
 template<typename... TArgs>

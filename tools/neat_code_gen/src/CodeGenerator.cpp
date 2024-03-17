@@ -12,8 +12,10 @@
 
 #include "reflifc/Expression.h"
 #include "reflifc/TemplateId.h"
+#include "reflifc/expr/Read.h"
 #include "reflifc/decl/AliasDeclaration.h"
 #include "reflifc/decl/Concept.h"
+#include "reflifc/decl/DeclarationReference.h"
 #include "reflifc/decl/Enumeration.h"
 #include "reflifc/decl/Function.h"
 #include "reflifc/decl/Intrinsic.h"
@@ -50,7 +52,7 @@ void CodeGenerator::write_cpp_file(reflifc::Module module, std::ostream& out)
 	auto unit = module.unit();
 	if (!unit.is_primary()) // For now
 	{
-		throw ContextualException("Currently the tool only supports primary module fragments (originating from a .ixx file from MSVC for example).");
+		throw ContextualException("Currently this tool only supports primary module fragments (originating from a .ixx file from MSVC for example).");
 	}
 
 	const auto module_name = unit.name();
@@ -58,13 +60,28 @@ void CodeGenerator::write_cpp_file(reflifc::Module module, std::ostream& out)
 	ReflectableTypes reflectable_types{};
 	{
 		ContextArea scan_area{ "While scanning for types."sv };
-		scan(module.global_namespace(), reflectable_types);
+		RecursionContext ctx{ environment, {} };
+		scan(module.global_namespace(), ctx, reflectable_types);
 	}
 
 	{
-		ContextArea scan_area{ "While rendering types."sv };
+		ContextArea render_fundamental_area{ "While rendering fundamental types."sv };
+		for (auto& reflectable_fundamental_type : reflectable_types.fundamental_types) {
+			render(reflectable_fundamental_type.as_fundamental());
+		}
+	}
+	
+	{
+		ContextArea render_area{ "While rendering types."sv };
 		for (auto& reflectable_type : reflectable_types.types) {
 			render(reflectable_type.second);
+		}
+	}
+
+	{
+		ContextArea render_area{ "While rendering templated types."sv };
+		for (auto& reflectable_templated_type : reflectable_types.template_types) {
+			render(reflectable_templated_type.second);
 		}
 	}
 
@@ -98,63 +115,86 @@ namespace Neat
 	out.flush();
 }
 
-void CodeGenerator::scan(reflifc::Scope scope_desc, ReflectableTypes& out_types)
+void CodeGenerator::scan(reflifc::Scope scope_desc, RecursionContext& ctx, ReflectableTypes& out_types)
 {
 	auto declarations = scope_desc.get_declarations();
 	for (auto declaration : declarations)
 	{
-		scan(declaration, out_types);
+		scan(declaration, ctx, out_types);
 	}
 }
 
-void CodeGenerator::scan(reflifc::Declaration decl, ReflectableTypes& out_types)
+void CodeGenerator::scan(reflifc::Declaration decl, RecursionContext& ctx, ReflectableTypes& out_types)
 {
+	auto aaa = decl.sort();
 	if (decl.is_scope())
-		scan(decl.as_scope(), decl, out_types);
-	else if (decl.is_template())
-		scan(decl.as_template(), decl, out_types);
+		scan(decl.as_scope(), decl, ctx, out_types);
 }
 
-void CodeGenerator::scan(reflifc::TemplateDeclaration template_decl, reflifc::Declaration decl, ReflectableTypes& out_types)
-{
-	// TODO: Implement
-}
-
-void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl, ReflectableTypes& out_types)
+void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl, RecursionContext& ctx, ReflectableTypes& out_types)
 {
 	switch (scope_decl.kind())
 	{
 	case ifc::TypeBasis::Class:
 	case ifc::TypeBasis::Struct:
-		scan(scope_decl.as_class_or_struct(), decl, out_types);
+		scan(scope_decl.as_class_or_struct(), decl, ctx, out_types);
 		break;
 	case ifc::TypeBasis::Union:
 		// TODO: Implement at some point
 		break;
 	case ifc::TypeBasis::Namespace:
-		scan(scope_decl.as_namespace().scope(), out_types);
+		scan(scope_decl.as_namespace().scope(), ctx, out_types);
 		break;
 	}
 }
+static bool is_reference_type(reflifc::Type type, RecursionContext& ctx);
+static bool is_reference_type(reflifc::Declaration decl, RecursionContext& ctx)
+{
+	if (decl.is_reference()) {
+		return is_reference_type(decl.as_reference().referenced_declaration(*ctx.environment), ctx);
+	}
+	if (decl.is_parameter()) {
+		auto template_expr = ctx.get_template_parameter(decl.as_parameter());
+		verify(template_expr.is_type()); // TODO: what if this is another parameter?
+		return is_reference_type(template_expr.as_type(), ctx);
+	}
 
-void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl, ReflectableTypes& out_types)
+	return false;
+}
+
+static bool is_reference_type(reflifc::Type type, RecursionContext& ctx)
+{
+	if (type.is_lvalue_reference() || type.is_rvalue_reference()) {
+		return true;
+	}
+
+	if (type.is_designated()) {
+		return is_reference_type(type.designation(), ctx);
+	}
+
+	return false;
+}
+
+void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl, RecursionContext& ctx, ReflectableTypes& out_types)
 {
 	if (out_types.types.contains(decl))
 	{
 		return;
 	}
-	if (!is_type_visible_from_module(decl, reflifc::Module{ ifc_file }, *environment))
+	if (!is_type_visible_from_module(decl, reflifc::Module{ ifc_file }, ctx))
 	{
-		auto typename__ = render_full_typename(decl, *environment);
 		return;
 	}
 
-	ReflectableType type{ decl, scope_decl };
+	ReflectableType type{ };
 
 	// Mark this type as being visited, at the end of this function we will fill in the full member info.
 	out_types.types.insert({ decl, type });
 
-	const bool reflect_privates = can_reflect_private_members(decl, reflifc::Module{ifc_file}, *environment);
+	type.type_name = render_full_typename(decl, ctx);
+	type.default_access = scope_decl.access();
+
+	const bool reflect_privates = can_reflect_private_members(decl, reflifc::Module{ifc_file}, ctx);
 
 	auto declarations = scope_decl.members();
 	for (auto decl : declarations)
@@ -165,10 +205,11 @@ void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration
 		{
 			const auto field = decl.as_field();
 
-			if (is_member_publicly_accessible(field, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, *environment))
+			if (!is_reference_type(field.type(), ctx) 
+				&& is_member_publicly_accessible(field, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, ctx))
 			{
 				type.fields.push_back(field);
-				scan(field.type(), out_types);
+				scan(field.type(), ctx, out_types);
 			}
 			break;
 		}
@@ -176,18 +217,29 @@ void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration
 		{
 			const auto method = decl.as_method();
 			
-			if (is_member_publicly_accessible(method, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, *environment))
+			if (is_member_publicly_accessible(method, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, ctx))
 			{
 				type.methods.push_back(method);
 
-				scan(method.type().return_type(), out_types);
+				scan(method.type().return_type(), ctx, out_types);
 				
 				auto params = method.type().parameters();
 				for (auto param : params)
 				{
-					scan(param, out_types);
+					scan(param, ctx, out_types);
 				}
 			}
+			break;
+		}
+		case ifc::DeclSort::Alias:
+		{
+			const auto alias = decl.as_alias();
+			
+			if (is_member_publicly_accessible(alias, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, ctx)) {
+				type.aliases.push_back(alias);
+				scan(alias.aliasee(), ctx, out_types);
+			}
+
 			break;
 		}
 		}
@@ -196,65 +248,85 @@ void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration
 	auto bases = scope_decl.bases();
 	for (auto base : bases)
 	{
-		if (is_type_visible_from_module(base.type, reflifc::Module{ ifc_file }, *environment))
+		if (is_type_visible_from_module(base.type, reflifc::Module{ ifc_file }, ctx))
 		{
 			type.bases.push_back(base);
-			scan(base.type, out_types);
+			scan(base.type, ctx, out_types);
 		}
 	}
 
-	out_types.types.insert_or_assign(type.decl, std::move(type));
+	out_types.types.insert_or_assign(decl, std::move(type));
 }
 
-void CodeGenerator::scan(reflifc::Type type, ReflectableTypes& out_types)
+static bool is_concrete_type(ifc::TypeBasis type)
+{
+	switch(type) {
+	case ifc::TypeBasis::Void:
+	case ifc::TypeBasis::Bool:
+	case ifc::TypeBasis::Char:
+	case ifc::TypeBasis::Wchar_t:
+	case ifc::TypeBasis::Int:
+	case ifc::TypeBasis::Float:
+	case ifc::TypeBasis::Double:
+	case ifc::TypeBasis::Nullptr:
+		return true;
+	default:
+		return false;
+	}
+}
+
+void CodeGenerator::scan(reflifc::Type type, RecursionContext& ctx, ReflectableTypes& out_types)
 {
 	switch (type.sort())
 	{
-	case ifc::TypeSort::Fundamental: 
-		break; // Currently we don't reflect integers n stuff, we need a declaration
+	case ifc::TypeSort::Fundamental:
+	{
+		assert(is_concrete_type(type.as_fundamental().basis));
+		out_types.fundamental_types.insert(type);
+	}	
+	break;
 	case ifc::TypeSort::Designated:
-		scan(type.designation(), out_types);
+		scan(type.designation(), ctx, out_types);
 		break;
-	case ifc::TypeSort::Tor: // Compiler generated constructor
-		// TODO: Implement constructors
+	case ifc::TypeSort::Tor: // Compiler generated constructor, implemented in NeatReflection runtime library
 		break;
 	case ifc::TypeSort::Syntactic:
-		scan(type.as_syntactic(), out_types);
+		scan(type.as_syntactic(), ctx, out_types);
 		break;
 	case ifc::TypeSort::Pointer:
-		scan(type.as_pointer().pointee, out_types);
+		scan(type.as_pointer().pointee, ctx, out_types);
 		break;
 	case ifc::TypeSort::LvalueReference:
-		scan(type.as_lvalue_reference().referee, out_types);
+		scan(type.as_lvalue_reference().referee, ctx, out_types);
 		break;
 	case ifc::TypeSort::RvalueReference:
-		scan(type.as_rvalue_reference().referee, out_types);
+		scan(type.as_rvalue_reference().referee, ctx, out_types);
 		break;
 	case ifc::TypeSort::Function:
-		scan(type.as_function().return_type(), out_types);
+		scan(type.as_function().return_type(), ctx, out_types);
 		for (auto parameter : type.as_function().parameters()) {
-			scan(parameter, out_types);
+			scan(parameter, ctx, out_types);
 		}
 		break;
 	case ifc::TypeSort::Method:
-		scan(type.as_method().return_type(), out_types);
+		scan(type.as_method().return_type(), ctx, out_types);
 		for (auto parameter : type.as_method().parameters()) {
-			scan(parameter, out_types);
+			scan(parameter, ctx, out_types);
 		}
 		break;
 	case ifc::TypeSort::Array:
-		scan(type.as_array().element(), out_types);
+		scan(type.as_array().element(), ctx, out_types);
 		break;
 	case ifc::TypeSort::Qualified:
-		scan(type.as_qualified().unqualified(), out_types);
+		scan(type.as_qualified().unqualified(), ctx, out_types);
 		break;
 	case ifc::TypeSort::Base:
-		scan(type.as_base().type, out_types);
+		scan(type.as_base().type, ctx, out_types);
 		break;
 	case ifc::TypeSort::Tuple: // TODO: Is this a typelist? if so why can't we iterate it?
 		break;
 	case ifc::TypeSort::Forall:
-		scan(type.as_forall().subject(), out_types);
+		scan(type.as_forall().subject(), ctx, out_types);
 		break;
 
 		// Not currently supported:
@@ -272,22 +344,18 @@ void CodeGenerator::scan(reflifc::Type type, ReflectableTypes& out_types)
 	}
 }
 
-void CodeGenerator::scan(reflifc::Expression expression, ReflectableTypes& out_types)
+void CodeGenerator::scan(reflifc::Expression expression, RecursionContext& ctx, ReflectableTypes& out_types)
 {
 	switch (expression.sort())
 	{
 	case ifc::ExprSort::NamedDecl:
-		scan(expression.referenced_decl(), out_types);
+		scan(expression.referenced_decl(), ctx, out_types);
 		break;
 	case ifc::ExprSort::Type:
-		scan(expression.as_type(), out_types);
+		scan(expression.as_type(), ctx, out_types);
 		break;
 	case ifc::ExprSort::TemplateId:
-		scan(expression.as_template_id().primary(), out_types);
-		for (auto argument : expression.as_template_id().arguments())
-		{
-			scan(argument, out_types);
-		}
+		scan(expression.as_template_id(), ctx, out_types);
 		break;
 	
 	default:
@@ -296,75 +364,307 @@ void CodeGenerator::scan(reflifc::Expression expression, ReflectableTypes& out_t
 	}
 }
 
+static reflifc::Declaration gib_declaration(reflifc::Expression expression, RecursionContext& ctx);
+static reflifc::Declaration gib_declaration(reflifc::Type type, RecursionContext& ctx)
+{
+	switch (type.sort()) {
+	case ifc::TypeSort::Fundamental:
+		// TODO: Implement
+	break;
+	case ifc::TypeSort::Designated:
+		return type.designation();
+	case ifc::TypeSort::Syntactic:
+		return gib_declaration(type.as_syntactic(), ctx);
+	case ifc::TypeSort::Pointer:
+		return gib_declaration(type.as_pointer().pointee, ctx);
+	case ifc::TypeSort::LvalueReference:
+		return gib_declaration(type.as_lvalue_reference().referee, ctx);
+	case ifc::TypeSort::RvalueReference:
+		return gib_declaration(type.as_rvalue_reference().referee, ctx);
+	case ifc::TypeSort::Function:
+		// TODO: Implemenent
+		break;
+	case ifc::TypeSort::Method:
+		// TODO: Implemenent
+		break;
+	case ifc::TypeSort::Array:
+		return gib_declaration(type.as_array().element(), ctx);
+	case ifc::TypeSort::Qualified:
+		return gib_declaration(type.as_qualified().unqualified(), ctx);
+	case ifc::TypeSort::Base:
+		return gib_declaration(type.as_base().type, ctx);
+	case ifc::TypeSort::Tuple: // TODO: Is this a typelist? if so why can't we iterate it?
+		break;
+	case ifc::TypeSort::Forall:
+		return gib_declaration(type.as_forall().subject(), ctx);
+
+		// Not currently supported:
+	case ifc::TypeSort::PointerToMember: // Not implemented yet by reflifc
+	case ifc::TypeSort::Expansion:
+	case ifc::TypeSort::Typename:
+	case ifc::TypeSort::Decltype:
+	case ifc::TypeSort::Placeholder:
+	case ifc::TypeSort::Unaligned: // Not implemented yet by reflifc
+	case ifc::TypeSort::SyntaxTree: // Not implemented yet by reflifc
+		break;
+	}
+
+	throw ContextualException(std::format("Unexpected type sort encountered while extracting declaration from type: {}",
+		type_sort_to_string(type.sort())));
+}
+
+static reflifc::Declaration gib_declaration(reflifc::Expression expression, RecursionContext& ctx)
+{
+	switch (expression.sort()) {
+	case ifc::ExprSort::NamedDecl:
+		return expression.referenced_decl();
+		break;
+	case ifc::ExprSort::Type:
+		gib_declaration(expression.as_type(), ctx);
+		break;
+	case ifc::ExprSort::TemplateId:
+		gib_declaration(expression.as_template_id().primary(), ctx);
+		break;
+	}
+}
+
+void CodeGenerator::scan(reflifc::TemplateId template_id, RecursionContext& ctx, ReflectableTypes& out_types)
+{
+	if (out_types.template_types.contains(template_id)) {
+		return;
+	}
+	if (!is_type_visible_from_module(template_id, reflifc::Module{ ifc_file }, ctx)) {
+		return;
+	}
+	if (!template_id.primary().is_qualref()) {
+		return;
+	}
+
+	auto templated_decl = template_id.primary().referenced_decl();
+	if (templated_decl.is_template() && templated_decl.as_template().entity().is_class_or_struct()) {
+		auto class_or_struct = templated_decl.as_template().entity().as_class_or_struct();
+
+		// Mark this type as visited, will be fill in at the end of this function
+		out_types.template_types.insert({ template_id, {} });
+		
+		ReflectableType template_type;
+		template_type.type_name = render_full_typename(template_id, ctx);
+
+		RecursionContext new_ctx{ ctx };
+		auto arguments = template_id.arguments();
+		new_ctx.template_argument_sets.emplace_back(arguments.begin(), arguments.end());
+
+		template_type.templates_context = new_ctx;
+
+		const bool reflect_privates = can_reflect_private_members(templated_decl, reflifc::Module{ ifc_file }, new_ctx);
+
+		for (auto decl : class_or_struct.members()) {
+			switch (decl.sort()) {
+			case ifc::DeclSort::Field:
+			{
+				const auto field = decl.as_field();
+
+				if (!is_reference_type(field.type(), new_ctx)
+					&& is_member_publicly_accessible(field, class_or_struct.kind(), reflect_privates, reflifc::Module{ ifc_file }, new_ctx)) {
+					template_type.fields.push_back(field);
+					scan(field.type(), new_ctx, out_types);
+				}
+				break;
+			}
+			case ifc::DeclSort::Method:
+			{
+				const auto method = decl.as_method();
+
+				if (is_member_publicly_accessible(method, class_or_struct.kind(), reflect_privates, reflifc::Module{ ifc_file }, new_ctx)) {
+					template_type.methods.push_back(method);
+
+					scan(method.type().return_type(), new_ctx, out_types);
+
+					auto params = method.type().parameters();
+					for (auto param : params) {
+						scan(param, new_ctx, out_types);
+					}
+				}
+				break;
+			}
+			case ifc::DeclSort::Alias:
+			{
+				const auto alias = decl.as_alias();
+
+				if (is_member_publicly_accessible(alias, class_or_struct.kind(), reflect_privates, reflifc::Module{ ifc_file }, new_ctx)) {
+					template_type.aliases.push_back(alias);
+					scan(alias.aliasee(), new_ctx, out_types);
+				}
+
+				break;
+			}
+			}
+		}
+
+		auto bases = class_or_struct.bases();
+		for (auto base : bases) {
+			if (is_type_visible_from_module(base.type, reflifc::Module{ ifc_file }, new_ctx)) {
+				template_type.bases.push_back(base);
+				scan(base.type, new_ctx, out_types);
+			}
+		}
+
+		out_types.template_types.insert_or_assign(template_id, template_type);
+	}
+
+	// Continue scanning it's template arguments
+	for (auto argument : template_id.arguments()) {
+		scan(argument, ctx, out_types);
+	}
+}
+
+void CodeGenerator::render(const ifc::FundamentalType& type)
+{
+	// Edge case, sizeof(void) doesn't compile
+	if (type.basis == ifc::TypeBasis::Void) {
+		code += R"(add_type(Type{ .name="void", .id=get_id<void>(), .size=0 });
+)"sv;
+		return;
+	}
+
+	auto type_name = render_full_typename(type);
+
+	code += std::format(R"(add_type(Type{{ .name="{0}", .id=get_id<{0}>(), .size=sizeof({0}) }});
+)", type_name);
+}
+
 void CodeGenerator::render(ReflectableType& type)
 {
-	const auto type_name = render_namespace(type.decl, *environment) + render_name(type.class_struct_decl.name(), *environment);
-	const bool reflect_privates = can_reflect_private_members(type.decl, reflifc::Module{ ifc_file }, *environment);
-	const bool is_class = (type.class_struct_decl.kind() == ifc::TypeBasis::Class);
+	auto& ctx = type.templates_context;
+	// TODO: don't store RecursionContext directly in ReflectableType, so we don't have to awkwardly fill in the environment here
+	ctx.environment = environment;
 
 	std::string fields;
 	fields.reserve(32 * type.fields.size());
-	for (auto& field : type.fields)
-	{
-		fields += render_field(type_name, field);
+	for (auto& field : type.fields) {
+		fields += render_field(type.type_name, type.default_access, field, ctx);
 		fields += ", ";
 	}
 
 	std::string methods;
 	methods.reserve(32 * type.methods.size());
-	for (auto& method : type.methods)
-	{
-		methods += render_method(type_name, method);
+	for (auto& method : type.methods) {
+		methods += render_method(type.type_name, type.default_access, method, ctx);
 		methods += ", ";
 	}
 
 	std::string bases;
 	bases.reserve(32 * type.bases.size());
-	for (auto& base_class : type.bases)
-	{
-		bases += render_base_class(type_name, is_class, base_class);
+	for (auto& base_class : type.bases) {
+		bases += render_base_class(type.type_name, type.default_access, base_class, ctx);
 		bases += ", ";
+	}
+
+	std::string aliases;
+	aliases.reserve(32 * type.aliases.size());
+	for (auto& alias : type.aliases) {
+		aliases += render_member_alias(alias, type.default_access, ctx);
+		aliases += ", ";
+	}
+
+	std::string template_arguments;
+	if (!ctx.template_argument_sets.empty()) { // TODO: This is a very wrong statement
+		template_arguments.reserve(32 * ctx.template_argument_sets.size());
+		for (auto& template_arg : ctx.template_argument_sets.back()) {
+			template_arguments += render_template_argument(template_arg, ctx); // TODO: use popped template argument set
+			template_arguments += ", ";
+		}
 	}
 
 	code += std::format(R"(add_type(Type::create<{0}>("{0}", get_id<{0}>(),
 	{{ {1} }},
 	{{ {2} }},
-	{{ {3} }}
+	{{ {3} }},
+	{{ {4} }},
+	{{ {5} }}
 ));
-)", type_name, bases, fields, methods);
+)", type.type_name, bases, fields, methods, aliases, template_arguments);
 }
 
-std::string CodeGenerator::render_field(std::string_view outer_class_type, const reflifc::Field& field) const
+std::string CodeGenerator::render_field(std::string_view outer_class_type, ifc::Access default_access, const reflifc::Field& field, RecursionContext& ctx) const
 {
-	auto type_sort = field.type().sort();
-	const auto field_type = render_full_typename(field.type(), *environment);
+	const auto field_type = render_full_typename(field.type(), ctx);
 	const auto name = field.name();
-	const auto access = render_as_neat_access_enum(field.access(), "Access::...");
+	const auto access = render_as_neat_access_enum(field.access(), default_access);
 
 	return std::format(R"(Field::create<{0}, {1}, &{0}::{2}>("{2}", {3}))", outer_class_type, field_type, name, access);
 }
 
-std::string CodeGenerator::render_method(std::string_view outer_class_type, const reflifc::Method& method) const
+std::string CodeGenerator::render_method(std::string_view outer_class_type, ifc::Access default_access, const reflifc::Method& method, RecursionContext& ctx) const
 {
 	const auto method_type = method.type();
-	const auto return_type = render_full_typename(method_type.return_type(), *environment);
-	const auto params = render_full_typename_list(method_type.parameters(), *environment);
+	const auto return_type = render_full_typename(method_type.return_type(), ctx);
+	const auto params = render_full_typename_list(method_type.parameters(), ctx);
 	const auto begin_params_delimiter = (params.empty() ? ""sv : ", "sv);
-	const auto name = render_name(method.name(), *environment);
-	const auto access = render_as_neat_access_enum(method.access());
-	const auto method_ptr_type = render_method_pointer(method_type, *environment);
+	const auto name = render_name(method.name(), ctx);
+	const auto access = render_as_neat_access_enum(method.access(), default_access);
+	const auto method_ptr_type = render_method_pointer(method_type, ctx);
 	
 	return std::format(R"(Method::create<({6})&{0}::{4}, {0}, {1}{2}{3}>("{4}", {5}))", outer_class_type, return_type, begin_params_delimiter, params, name, access, method_ptr_type);
 }
 
-std::string CodeGenerator::render_base_class(std::string_view outer_class_type, bool outer_is_class, const reflifc::BaseType& base_class) const
+std::string CodeGenerator::render_base_class(std::string_view outer_class_type, ifc::Access default_access, const reflifc::BaseType& base_class, RecursionContext& ctx) const
 {
 	// If outer type is a class or struct, the default access is private or public
-	const auto default_access = (outer_is_class ? "private" : "public");
 	auto access_string = render_as_neat_access_enum(base_class.access, default_access);
 
-	auto type_name = render_full_typename(base_class.type, *environment);
+	auto type_name = render_full_typename(base_class.type, ctx);
 
 	return std::format(R"(BaseClass{{ get_id<{0}>(), {1} }})", type_name, access_string);
 }
 
+std::string CodeGenerator::render_member_alias(const reflifc::AliasDeclaration& member_alias, ifc::Access default_access, RecursionContext& ctx) const
+{
+	auto alias_name = member_alias.name();
+	const auto field_type = render_full_typename(member_alias.aliasee(), ctx);
+	const auto access = render_as_neat_access_enum(member_alias.access(), default_access);
+
+	return std::format(R"(TypeAlias{{ "{0}", get_id<{1}>(), {2} }})", alias_name, field_type, access);
+}
+
+std::string CodeGenerator::render_template_argument(const reflifc::Expression& template_arg, RecursionContext& ctx) const
+{
+	std::string rendered_argument;
+	bool is_type_argument;
+
+	switch (template_arg.sort()) {
+		// Expression type refers to a non-type template parameter
+	case ifc::ExprSort::Read:
+		rendered_argument = render_full_typename(template_arg.as_read().address(), ctx); // TODO: Also cast to the correct integer type, needs to be obtained from the TemplateDecl
+		is_type_argument = false;
+		break;
+	case ifc::ExprSort::Literal:
+		rendered_argument = render_full_typename(template_arg.as_literal());
+		is_type_argument = false;
+		break;
+
+		// Expression type refers to a type template parameter
+	case ifc::ExprSort::NamedDecl:
+		rendered_argument = render_full_typename(template_arg.referenced_decl(), ctx);
+		is_type_argument = true;
+		break;
+	case ifc::ExprSort::Type:
+		rendered_argument = render_full_typename(template_arg.as_type(), ctx);
+		is_type_argument = true;
+		break;
+	case ifc::ExprSort::TemplateId:
+		rendered_argument = render_full_typename(template_arg.as_template_id(), ctx);
+		is_type_argument = true;
+		break;
+
+		// This function is only for rendering a template parameter, most expression sorts are not used for that so will be ignored:
+	default:
+		throw ContextualException{ std::format("Unexpected expression while rendering typename. ExprSort is: {}",
+			expr_sort_to_string(template_arg.sort())) };
+	}
+	
+	if (is_type_argument)
+		return std::format("TemplateArgument{{ Neat::get_id<{0}>() }}", rendered_argument);
+	else
+		return std::format("TemplateArgument{{ Neat::Any{{ {0} }} }}", rendered_argument);
+}

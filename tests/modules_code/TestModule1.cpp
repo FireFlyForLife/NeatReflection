@@ -71,6 +71,7 @@ NonTrivialClass& NonTrivialClass::operator=(const NonTrivialClass& other)
 
 	delete data;
 	data = new int(*other.data);
+	return *this;
 }
 
 NonTrivialClass& NonTrivialClass::operator=(NonTrivialClass&& other)
@@ -82,6 +83,7 @@ NonTrivialClass& NonTrivialClass::operator=(NonTrivialClass&& other)
 	delete data;
 	data = other.data;
 	other.data = nullptr;
+	return *this;
 }
 
 NonTrivialClass::~NonTrivialClass()

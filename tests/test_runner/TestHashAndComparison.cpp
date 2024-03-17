@@ -18,6 +18,8 @@ Neat::Type create_hash_test_base_type()
 	return Neat::Type::create<HashTestTypeBase>("HashTestTypeBase", Neat::get_id<HashTestTypeBase>(),
 		{ },
 		{ },
+		{ },
+		{ },
 		{ }
 	);
 }
@@ -27,7 +29,9 @@ Neat::Type create_hash_test_type()
 	return Neat::Type::create<HashTestType>("HashTestType", Neat::get_id<HashTestType>(),
 		{ Neat::BaseClass{ Neat::get_id<HashTestTypeBase>(), Neat::Access::Public }, Neat::BaseClass{ Neat::get_id<HashTestTypeBase2>(), Neat::Access::Public } },
 		{ Neat::Field::create<HashTestType, int, &HashTestType::field_first>("field_first", Neat::Access::Public), Neat::Field::create<HashTestType, double, &HashTestType::field_second>("field_second", Neat::Access::Public) },
-		{ Neat::Method::create<&HashTestType::method_first, HashTestType, void>("method_first", Neat::Access::Public), Neat::Method::create<&HashTestType::method_second, HashTestType, void, int*>("method_second", Neat::Access::Public) }
+		{ Neat::Method::create<&HashTestType::method_first, HashTestType, void>("method_first", Neat::Access::Public), Neat::Method::create<&HashTestType::method_second, HashTestType, void, int*>("method_second", Neat::Access::Public) },
+		{ },
+		{ }
 	);
 }
 

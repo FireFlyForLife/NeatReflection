@@ -23,6 +23,7 @@ namespace Neat
 {
 	struct Type;
 	struct BaseClass;
+	struct TypeAlias;
 	struct Field;
 	struct Method;
 	struct TemplateArgument;
@@ -53,12 +54,13 @@ namespace Neat
 		// Functions
 		template<typename T>
 		static Type create(std::string_view name, TemplateTypeId id, 
-			std::vector<BaseClass> bases, std::vector<Field> fields, std::vector<Method> methods);
+			std::vector<BaseClass> bases, std::vector<Field> fields, std::vector<Method> methods,
+			std::vector<TypeAlias> member_aliases, std::vector<TemplateArgument> template_arguments);
 
 		using DefaultConstructor = void (*)(AnyPtr uninitialised_object);
 		using Destructor = void (*)(AnyPtr object);
-		DefaultConstructor default_constructor;
-		Destructor destructor;
+		DefaultConstructor default_constructor = nullptr;
+		Destructor destructor = nullptr;
 
 		// Data
 		std::string name;
@@ -67,6 +69,7 @@ namespace Neat
 		std::vector<BaseClass> bases;
 		std::vector<Field> fields;
 		std::vector<Method> methods;
+		std::vector<TypeAlias> member_aliases;
 		std::vector<TemplateArgument> template_arguments;
 
 		// Operators
@@ -82,6 +85,17 @@ namespace Neat
 
 		// Operators
 		auto operator<=>(const BaseClass& other) const noexcept = default;
+	};
+
+	struct TypeAlias
+	{
+		// Data
+		std::string name;
+		TemplateTypeId type;
+		Access access;
+
+		// Operators
+		auto operator<=>(const TypeAlias& other) const noexcept = default;
 	};
 
 	struct Field
@@ -165,7 +179,8 @@ namespace Neat
 
 	template<typename T>
 	Type Type::create(std::string_view name, TemplateTypeId id,
-		std::vector<BaseClass> bases, std::vector<Field> fields, std::vector<Method> methods)
+		std::vector<BaseClass> bases, std::vector<Field> fields, std::vector<Method> methods,
+		std::vector<TypeAlias> member_aliases, std::vector<TemplateArgument> template_arguments)
 	{
 		return Type{
 			.default_constructor = (std::is_default_constructible_v<T> ? &Detail::destructor_erased<T> : nullptr),
@@ -175,7 +190,9 @@ namespace Neat
 			.size = sizeof(T),
 			.bases = std::move(bases),
 			.fields = std::move(fields),
-			.methods = std::move(methods)
+			.methods = std::move(methods),
+			.member_aliases = std::move(member_aliases),
+			.template_arguments = std::move(template_arguments)
 		};
 	}
 
@@ -254,7 +271,7 @@ namespace Neat
 			// Invoke method
 			auto unwrap_arguments_and_invoke = []<size_t... I>(TObject* t_object, std::span<Any> arguments, std::index_sequence<I...>)
 			{
-				return (t_object->*PtrToMemberFunction)((std::move(arguments[I].value<std::decay_t<TArgs>>()))...);
+				return (t_object->*PtrToMemberFunction)((std::forward<TArgs>(arguments[I].value<std::decay_t<TArgs>>()))...);
 			};
 			
 			TObject* object_ = static_cast<TObject*>(object.value_ptr);
@@ -291,7 +308,7 @@ namespace Neat
 
 	inline bool Type::operator==(const Type& other) const noexcept
 	{
-		return id == other.id;
+		return (*this <=> other) == std::strong_ordering::equal;
 	}
 
 	inline std::strong_ordering Type::operator<=>(const Type& other) const noexcept
@@ -301,8 +318,7 @@ namespace Neat
 
 	inline bool Field::operator==(const Field& other) const noexcept
 	{
-		return object_type == other.object_type
-			&& name == other.name;
+		return (*this <=> other) == std::strong_ordering::equal;
 	}
 
 	inline std::strong_ordering Field::operator<=>(const Field& other) const noexcept
@@ -318,10 +334,7 @@ namespace Neat
 
 	inline bool Method::operator==(const Method& other) const noexcept
 	{
-		return object_type == other.object_type
-			&& return_type == other.return_type
-			&& argument_types == other.argument_types
-			&& name == other.name;
+		return (*this <=> other) == std::strong_ordering::equal;
 	}
 
 	inline std::strong_ordering Method::operator<=>(const Method& other) const noexcept
