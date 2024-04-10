@@ -10,8 +10,8 @@
 	# Third party
 	FetchContent_Declare(
 		ifc-reader
-		GIT_REPOSITORY https://github.com/AndreyG/ifc-reader.git
-		GIT_TAG 7a044c0bf9b2d4147f3eed778c79eff15e61b13d # Latest at the time of writing
+		GIT_REPOSITORY https://github.com/FireFlyForLife/ifc-reader.git
+		GIT_TAG 0a48f5b740175fd4dd7adaf3a7affe2ba7f01e02 # Latest at the time of writing
 		FIND_PACKAGE_ARGS
 	)
 	FetchContent_Declare(

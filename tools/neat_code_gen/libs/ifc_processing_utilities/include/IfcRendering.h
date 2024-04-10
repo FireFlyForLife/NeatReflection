@@ -21,7 +21,7 @@ struct RecursionContext
 	ifc::Environment* environment;
 	std::vector<std::vector<reflifc::Expression>> template_argument_sets;
 
-	reflifc::Expression get_template_parameter(reflifc::Parameter parameter) const;
+	std::pair<reflifc::Expression, RecursionContext> get_template_parameter(reflifc::Parameter parameter) const;
 };
 
 std::string render_full_typename(reflifc::Type type, RecursionContext& ctx);
@@ -33,7 +33,7 @@ std::string render_full_typename(reflifc::TupleExpressionView tuple, RecursionCo
 std::string render_full_typename(reflifc::TemplateId template_id, RecursionContext& ctx);
 std::string render_full_typename(reflifc::Declaration decl, RecursionContext& ctx);
 
-std::string render_method_pointer(reflifc::MethodType type, RecursionContext& ctx);
+std::string render_method_pointer(reflifc::MethodType type, std::string_view outer_class_type, RecursionContext& ctx);
 
 std::string render_full_typename_list(reflifc::TupleTypeView types, RecursionContext& ctx);
 
@@ -60,9 +60,15 @@ bool is_type_visible_from_module(reflifc::FunctionType function, reflifc::Module
 bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module root_module, RecursionContext& ctx);
 bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module root_module, RecursionContext& ctx);
 bool is_type_visible_from_module(reflifc::TemplateId template_id, reflifc::Module root_module, RecursionContext& ctx);
+bool is_type_visible_from_module(reflifc::PathExpression path, reflifc::Module root_module, RecursionContext& ctx);
 
 struct ModuleCache {};
 bool is_module_imported_in_module(reflifc::Module to_check, reflifc::Module module_, ifc::Environment& environment);
 
 reflifc::Declaration get_home_scope(const reflifc::Declaration& decl, RecursionContext& ctx);
 ifc::BasicSpecifiers get_basic_specifiers(reflifc::Declaration decl, RecursionContext& ctx);
+std::optional<std::string_view> get_declaration_name(reflifc::Declaration decl, RecursionContext& ctx);
+
+reflifc::Type resolve_type(reflifc::PathExpression path, RecursionContext& ctx);
+reflifc::Type resolve_type(reflifc::Expression scope, std::string_view dependant_name, RecursionContext& ctx);
+reflifc::Type resolve_type(reflifc::Declaration scope, std::string_view dependant_name, RecursionContext& ctx);

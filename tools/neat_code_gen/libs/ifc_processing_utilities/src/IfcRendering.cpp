@@ -9,6 +9,9 @@
 #include "ifc/Declaration.h"
 #include "reflifc/Expression.h"
 #include "reflifc/expr/Read.h"
+#include "reflifc/expr/Path.h"
+#include "reflifc/expr/UnqualifiedId.h"
+#include "reflifc/expr/QualifiedName.h"
 #include "reflifc/TemplateId.h"
 #include "reflifc/decl/AliasDeclaration.h"
 #include "reflifc/decl/ClassOrStruct.h"
@@ -39,15 +42,23 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 
-reflifc::Expression RecursionContext::get_template_parameter(reflifc::Parameter parameter) const
+std::pair<reflifc::Expression, RecursionContext> RecursionContext::get_template_parameter(reflifc::Parameter parameter) const
 {
 	verify(parameter.sort() == ifc::ParameterSort::Type || parameter.sort() == ifc::ParameterSort::NonType);
 
-	auto level_index = (uint32_t)parameter.level() - 1;
+	auto level_index = template_argument_sets.size() - 1 - ((uint32_t)parameter.level() - 1);
 	auto parameter_index = (uint32_t)parameter.position() - 1;
 	verify(level_index < template_argument_sets.size());
 	verify(parameter_index < template_argument_sets[level_index].size());
-	return template_argument_sets[level_index][parameter_index];
+	reflifc::Expression argument = template_argument_sets[level_index][parameter_index];
+	
+	RecursionContext relative_ctx{ *this };
+	relative_ctx.template_argument_sets.erase(
+		relative_ctx.template_argument_sets.begin() + level_index, 
+		relative_ctx.template_argument_sets.end()
+	);
+
+	return { argument, relative_ctx };
 }
 
 std::string render_full_typename(reflifc::Type type, RecursionContext& ctx)
@@ -81,13 +92,19 @@ std::string render_full_typename(reflifc::Type type, RecursionContext& ctx)
 		return render_full_typename(type.as_function(), ctx);
 	case ifc::TypeSort::Syntactic:
 		return render_full_typename(type.as_syntactic(), ctx);
+	case ifc::TypeSort::Typename:
+		if (auto resolved_type = resolve_type(type.typename_path(), ctx)) {
+			return render_full_typename(resolved_type, ctx);
+		} else {
+			// If we could not resolve the type, return the typename path as string.
+			return "typename " + render_full_typename(type.typename_path().scope(), ctx) + "::" + render_full_typename(type.typename_path().member(), ctx);
+		}
 
 		// Currently unsupported
 	case ifc::TypeSort::Expansion: // variadic pack expansion (...)
 	case ifc::TypeSort::PointerToMember: // U (T::*);
 	case ifc::TypeSort::Method: // U (T::*)(Args...);
 		// case ifc::TypeSort::Array: // T t[N]; Not implemented yet in ifc-reader
-		// case ifc::TypeSort::Typename: // typename T::dependant_type; Not implementet yet in ifc-reader
 	case ifc::TypeSort::Decltype: // Seems to complicated to support
 	case ifc::TypeSort::Forall: // Template declaration. Not used yet in MSVC
 	case ifc::TypeSort::Unaligned: // __unaligned T; Partition not implemented yet in ifc-reader
@@ -220,6 +237,8 @@ std::string render_full_typename(reflifc::Expression expr, RecursionContext& ctx
 		return render_full_typename(expr.as_literal());
 	case ifc::ExprSort::Read:
 		return render_full_typename(expr.as_read().address(), ctx);
+	case ifc::ExprSort::UnqualifiedId:
+		return render_name(expr.as_unqualified_id().name(), ctx); // TODO: Should this prepend `::` ?
 	case ifc::ExprSort::Empty:
 		return "";
 
@@ -276,14 +295,13 @@ std::string render_full_typename(reflifc::Declaration decl, RecursionContext& ct
 }
 
 
-std::string render_method_pointer(reflifc::MethodType type, RecursionContext& ctx)
+std::string render_method_pointer(reflifc::MethodType type, std::string_view outer_class_type, RecursionContext& ctx)
 {
 	const auto return_type = render_full_typename(type.return_type(), ctx);
-	const auto class_type = render_full_typename(type.scope(), ctx);
 	const auto parameter_types = render_full_typename_list(type.parameters(), ctx);
 	const auto method_traits = render_function_type_traits(type.traits());
 
-	return std::format("{0} ({1}::*)({2}) {3}", return_type, class_type, parameter_types, method_traits);
+	return std::format("{0} ({1}::*)({2}) {3}", return_type, outer_class_type, parameter_types, method_traits);
 }
 
 
@@ -369,7 +387,7 @@ std::string render_name(reflifc::Name name, RecursionContext& ctx)
 
 	switch (name.sort()) {
 	case ifc::NameSort::Identifier: return name.as_identifier();
-	case ifc::NameSort::Operator: return "operator"s + name.operator_name();
+	case ifc::NameSort::Operator: return "operator "s + name.operator_name();
 	case ifc::NameSort::Literal: return name.as_literal();
 	case ifc::NameSort::Specialization: return render_name(name.as_specialization(), ctx);
 		
@@ -399,8 +417,8 @@ std::string render_refered_declaration(reflifc::Declaration decl, RecursionConte
 	{
 		auto aaaa = decl.as_parameter().sort();
 		auto nameee = decl.as_parameter().name();
-		return render_full_typename(ctx.get_template_parameter(decl.as_parameter()), ctx); // TODO: Does this work for things that are not template args?
-		//return param.name();
+		auto[argument, new_ctx] = ctx.get_template_parameter(decl.as_parameter());
+		return render_full_typename(argument, new_ctx);
 	}
 	case ifc::DeclSort::Scope:
 	{
@@ -651,7 +669,7 @@ bool is_type_visible_from_module(reflifc::Type type, reflifc::Module root_module
 	case ifc::TypeSort::Array:
 		return is_type_visible_from_module(type.as_array().element(), root_module, ctx);
 	case ifc::TypeSort::Typename: 
-		return false; // Dependant typename, too difficult to implement currently and probably not needed
+		return is_type_visible_from_module(type.typename_path(), root_module, ctx);
 	case ifc::TypeSort::Base:
 		return is_type_visible_from_module(type.as_base().type, root_module, ctx);
 	case ifc::TypeSort::Decltype:
@@ -726,13 +744,16 @@ bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module root_
 		return true; // ifc::LiteralSort only has the types uint32, uint64 or double. Each of these types are always visible. 
 	case ifc::ExprSort::Empty:
 		return false;
+	case ifc::ExprSort::Read:
+		return is_type_visible_from_module(expr.as_read().address(), root_module, ctx);
+	case ifc::ExprSort::UnqualifiedId:
+		//return is_type_visible_from_module(expr.as_unqualified_id().scope(), root_module, ctx);
 
 		// Not supported currently, will need more investigation.
 	case ifc::ExprSort::Lambda:
 	case ifc::ExprSort::UnresolvedId:
 	case ifc::ExprSort::SimpleIdentifier:
 
-	case ifc::ExprSort::UnqualifiedId:
 	case ifc::ExprSort::QualifiedName:
 	case ifc::ExprSort::Path:
 
@@ -754,6 +775,21 @@ bool is_type_visible_from_module(reflifc::TemplateId template_id, reflifc::Modul
 		{
 			return is_type_visible_from_module(arg, root_module, ctx);
 		});
+}
+
+bool is_type_visible_from_module(reflifc::PathExpression path, reflifc::Module root_module, RecursionContext& ctx)
+{
+	if (!is_type_visible_from_module(path.scope(), root_module, ctx)) {
+		return false;
+	}
+	
+	auto t = resolve_type(path, ctx);
+
+	if (!is_type_visible_from_module(t, root_module, ctx)) {
+		return false;
+	}
+
+	return true;
 }
 
 static bool is_module_imported_in_exported_module(reflifc::Module to_check, reflifc::Module root_module, ifc::Environment& environment)
@@ -809,9 +845,9 @@ struct GetHomeScope
 	reflifc::Declaration operator()(reflifc::Parameter const& parameter)
 	{
 		if (parameter.sort() == ifc::ParameterSort::Type) {
-			auto type = ctx->get_template_parameter(parameter).as_type();
-			if (type.is_designated()) {
-				return get_home_scope(type.designation(), *ctx);
+			auto [argument, new_ctx] = ctx->get_template_parameter(parameter);
+			if (argument.as_type().is_designated()) {
+				return get_home_scope(argument.as_type().designation(), new_ctx);
 			}
 		}
 
@@ -848,9 +884,9 @@ struct GetBasicSpecifiers
 	ifc::BasicSpecifiers operator()(reflifc::Parameter const& parameter)
 	{
 		if (parameter.sort() == ifc::ParameterSort::Type) {
-			auto type = ctx->get_template_parameter(parameter).as_type();
-			if (type.is_designated()) {
-				return get_basic_specifiers(type.designation(), *ctx);
+			auto[argument, new_ctx] = ctx->get_template_parameter(parameter);
+			if (argument.as_type().is_designated()) {
+				return get_basic_specifiers(argument.as_type().designation(), new_ctx);
 			}
 		}
 
@@ -867,4 +903,132 @@ ifc::BasicSpecifiers get_basic_specifiers(reflifc::Declaration decl, RecursionCo
 	return visit_declaration<ifc::BasicSpecifiers>(decl, *ctx.environment,
 		GetBasicSpecifiers{ &ctx }
 	);
+}
+
+// Get declaration name
+template<typename T>
+concept HasDeclarationName = requires(T t) {
+	{ t.name() } -> std::same_as<const char*>;
+};
+
+struct GetDeclarationName
+{
+	std::optional<std::string_view> operator()(HasDeclarationName auto const& t)
+	{
+		return t.name();
+	}
+
+	std::optional<std::string_view> operator()(reflifc::Parameter const& parameter)
+	{
+		if (parameter.sort() == ifc::ParameterSort::Type) {
+			auto [argument, new_ctx] = ctx->get_template_parameter(parameter);
+			if (argument.as_type().is_designated()) {
+				return get_declaration_name(argument.as_type().designation(), new_ctx);
+			}
+		}
+
+		return std::nullopt;
+	}
+
+	std::optional<std::string_view> operator()(...)
+	{
+		return std::nullopt;
+	}
+
+	RecursionContext* ctx;
+};
+
+std::optional<std::string_view> get_declaration_name(reflifc::Declaration decl, RecursionContext& ctx)
+{
+	ContextArea area_{ "While getting the declaration name."sv };
+
+	return visit_declaration<std::optional<std::string_view>>(decl, *ctx.environment,
+		GetDeclarationName{ &ctx }
+	);
+}
+
+reflifc::Type resolve_type(reflifc::PathExpression path, RecursionContext& ctx)
+{
+	reflifc::Name dependant_name{ nullptr, {} };
+	switch (path.member().sort()) {
+	case ifc::ExprSort::UnresolvedId:
+		throw ContextualException("UnresolvedId is not implemented yet in reflifc.");
+	case ifc::ExprSort::UnqualifiedId:
+		dependant_name = path.member().as_unqualified_id().name();
+		break;
+	default:
+		throw ContextualException("Unexpected member sort while checking if the type can be exported.");
+	}
+
+	std::string_view dependant_name_str;
+	switch (dependant_name.sort()) {
+	case ifc::NameSort::Identifier:
+		dependant_name_str = dependant_name.as_identifier();
+		break;
+	case ifc::NameSort::Operator:
+		throw ContextualException("Not handled yet by CodeGenerator");
+	case ifc::NameSort::Conversion:
+		throw ContextualException("Not implemented yet by reflifc");
+	case ifc::NameSort::Literal:
+		throw ContextualException("A string literal is not expected to be encountered for a dependant typename.");
+	case ifc::NameSort::Template:
+		throw ContextualException("Not implemented yet by reflifc");
+	case ifc::NameSort::Specialization:
+		throw ContextualException("Not handled yet by CodeGenerator");
+	case ifc::NameSort::SourceFile:
+		throw ContextualException("A source file name is not expected to be encountered for a dependant typename.");
+	case ifc::NameSort::Guide:
+		throw ContextualException("A source file name is not expected to be encountered for a dependant typename.");
+	}
+
+	return resolve_type(path.scope(), dependant_name_str, ctx);
+}
+
+reflifc::Type resolve_type(reflifc::Expression scope, std::string_view dependant_name, RecursionContext& ctx)
+{
+	switch (scope.sort()) {
+	case ifc::ExprSort::NamedDecl:
+		return resolve_type(scope.referenced_decl(), dependant_name, ctx);
+	case ifc::ExprSort::Type:
+		return scope.as_type();
+	case ifc::ExprSort::QualifiedName:
+		// TODO: This probably needs to be resolved recursively?
+		//scope.as_qualified_name().parts();
+		throw ContextualException("QualifiedName is not implemented yet by CodeGenerator.");
+	case ifc::ExprSort::TemplateId:
+	{
+		RecursionContext new_ctx{ ctx };
+		auto arguments = scope.as_template_id().arguments();
+		new_ctx.template_argument_sets.emplace_back(arguments.begin(), arguments.end());
+		return resolve_type(scope.as_template_id().primary(), dependant_name, new_ctx);
+	}
+	default:
+		throw ContextualException("Unexpected expression sort while resolving a type.");
+	}
+}
+
+reflifc::Type resolve_type(reflifc::Declaration scope, std::string_view dependant_name, RecursionContext& ctx)
+{
+	switch (scope.sort()) {
+	case ifc::DeclSort::Scope:
+	{
+		auto scope_decl = scope.as_scope();
+		if (scope_decl.is_class_or_struct()) {
+			auto class_or_struct = scope_decl.as_class_or_struct();
+			
+			for (auto member : class_or_struct.members()) {
+				if (get_declaration_name(member, ctx) == dependant_name && member.is_alias()) {
+					return member.as_alias().aliasee();
+				}
+			}
+		}
+		break;
+	}
+	case ifc::DeclSort::Template:
+		return resolve_type(scope.as_template().entity(), dependant_name, ctx);
+	default:
+		break;
+	}
+
+	throw ContextualException("Could not resolve type.");
 }

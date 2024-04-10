@@ -13,6 +13,7 @@
 #include "reflifc/Expression.h"
 #include "reflifc/TemplateId.h"
 #include "reflifc/expr/Read.h"
+#include "reflifc/expr/Path.h"
 #include "reflifc/decl/AliasDeclaration.h"
 #include "reflifc/decl/Concept.h"
 #include "reflifc/decl/DeclarationReference.h"
@@ -74,14 +75,16 @@ void CodeGenerator::write_cpp_file(reflifc::Module module, std::ostream& out)
 	{
 		ContextArea render_area{ "While rendering types."sv };
 		for (auto& reflectable_type : reflectable_types.types) {
-			render(reflectable_type.second);
+			const bool is_templated_type = false;
+			render(reflectable_type.second, is_templated_type);
 		}
 	}
 
 	{
 		ContextArea render_area{ "While rendering templated types."sv };
 		for (auto& reflectable_templated_type : reflectable_types.template_types) {
-			render(reflectable_templated_type.second);
+			const bool is_templated_type = true;
+			render(reflectable_templated_type.second, is_templated_type);
 		}
 	}
 
@@ -154,9 +157,9 @@ static bool is_reference_type(reflifc::Declaration decl, RecursionContext& ctx)
 		return is_reference_type(decl.as_reference().referenced_declaration(*ctx.environment), ctx);
 	}
 	if (decl.is_parameter()) {
-		auto template_expr = ctx.get_template_parameter(decl.as_parameter());
-		verify(template_expr.is_type()); // TODO: what if this is another parameter?
-		return is_reference_type(template_expr.as_type(), ctx);
+		auto[argument, new_ctx] = ctx.get_template_parameter(decl.as_parameter());
+		verify(argument.is_type()); // TODO: what if this is another parameter?
+		return is_reference_type(argument.as_type(), new_ctx);
 	}
 
 	return false;
@@ -217,7 +220,8 @@ void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration
 		{
 			const auto method = decl.as_method();
 			
-			if (is_member_publicly_accessible(method, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, ctx))
+			if (!method.name().is_conversion()
+				&& is_member_publicly_accessible(method, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, ctx))
 			{
 				type.methods.push_back(method);
 
@@ -283,7 +287,7 @@ void CodeGenerator::scan(reflifc::Type type, RecursionContext& ctx, ReflectableT
 	{
 		assert(is_concrete_type(type.as_fundamental().basis));
 		out_types.fundamental_types.insert(type);
-	}	
+	}
 	break;
 	case ifc::TypeSort::Designated:
 		scan(type.designation(), ctx, out_types);
@@ -317,6 +321,11 @@ void CodeGenerator::scan(reflifc::Type type, RecursionContext& ctx, ReflectableT
 	case ifc::TypeSort::Array:
 		scan(type.as_array().element(), ctx, out_types);
 		break;
+	case ifc::TypeSort::Typename:
+		if (auto resolved_type = resolve_type(type.typename_path(), ctx)) { // TODO: This should probably update ctx too?
+			scan(resolved_type, ctx, out_types);
+		}
+		break;
 	case ifc::TypeSort::Qualified:
 		scan(type.as_qualified().unqualified(), ctx, out_types);
 		break;
@@ -332,7 +341,6 @@ void CodeGenerator::scan(reflifc::Type type, RecursionContext& ctx, ReflectableT
 		// Not currently supported:
 	case ifc::TypeSort::PointerToMember: // Not implemented yet by reflifc
 	case ifc::TypeSort::Expansion:
-	case ifc::TypeSort::Typename:
 	case ifc::TypeSort::Decltype:
 	case ifc::TypeSort::Placeholder:
 	case ifc::TypeSort::Unaligned: // Not implemented yet by reflifc
@@ -439,6 +447,8 @@ void CodeGenerator::scan(reflifc::TemplateId template_id, RecursionContext& ctx,
 	if (!template_id.primary().is_qualref()) {
 		return;
 	}
+	
+	// TODO: Handle template specializations (#15)
 
 	auto templated_decl = template_id.primary().referenced_decl();
 	if (templated_decl.is_template() && templated_decl.as_template().entity().is_class_or_struct()) {
@@ -475,7 +485,8 @@ void CodeGenerator::scan(reflifc::TemplateId template_id, RecursionContext& ctx,
 			{
 				const auto method = decl.as_method();
 
-				if (is_member_publicly_accessible(method, class_or_struct.kind(), reflect_privates, reflifc::Module{ ifc_file }, new_ctx)) {
+				if (!method.name().is_conversion()
+					&& is_member_publicly_accessible(method, class_or_struct.kind(), reflect_privates, reflifc::Module{ ifc_file }, new_ctx)) {
 					template_type.methods.push_back(method);
 
 					scan(method.type().return_type(), new_ctx, out_types);
@@ -533,7 +544,7 @@ void CodeGenerator::render(const ifc::FundamentalType& type)
 )", type_name);
 }
 
-void CodeGenerator::render(ReflectableType& type)
+void CodeGenerator::render(ReflectableType& type, bool is_templated_type)
 {
 	auto& ctx = type.templates_context;
 	// TODO: don't store RecursionContext directly in ReflectableType, so we don't have to awkwardly fill in the environment here
@@ -568,10 +579,14 @@ void CodeGenerator::render(ReflectableType& type)
 	}
 
 	std::string template_arguments;
-	if (!ctx.template_argument_sets.empty()) { // TODO: This is a very wrong statement
+	if (is_templated_type) {
 		template_arguments.reserve(32 * ctx.template_argument_sets.size());
-		for (auto& template_arg : ctx.template_argument_sets.back()) {
-			template_arguments += render_template_argument(template_arg, ctx); // TODO: use popped template argument set
+
+		RecursionContext previous_context = ctx;
+		previous_context.template_argument_sets.pop_back();
+
+		for (const auto& template_arg : ctx.template_argument_sets.back()) {
+			template_arguments += render_template_argument(template_arg, previous_context);
 			template_arguments += ", ";
 		}
 	}
@@ -603,7 +618,7 @@ std::string CodeGenerator::render_method(std::string_view outer_class_type, ifc:
 	const auto begin_params_delimiter = (params.empty() ? ""sv : ", "sv);
 	const auto name = render_name(method.name(), ctx);
 	const auto access = render_as_neat_access_enum(method.access(), default_access);
-	const auto method_ptr_type = render_method_pointer(method_type, ctx);
+	const auto method_ptr_type = render_method_pointer(method_type, outer_class_type, ctx);
 	
 	return std::format(R"(Method::create<({6})&{0}::{4}, {0}, {1}{2}{3}>("{4}", {5}))", outer_class_type, return_type, begin_params_delimiter, params, name, access, method_ptr_type);
 }

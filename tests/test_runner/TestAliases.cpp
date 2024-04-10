@@ -2,7 +2,9 @@
 
 #include "neat/Reflection.h"
 
+import TestModuleWithTemplates;
 import TestModule1;
+
 
 TEST_CASE("Test templated class with alias")
 {
@@ -80,21 +82,4 @@ TEST_CASE("Struct with aliases")
 	CHECK(my_class_ref_field.name == "my_class_ptr");
 	CHECK(my_class_ref_field.type == Neat::get_id<MyClass*>());
 	CHECK(my_class_ref_field.access == Neat::Access::Public);
-}
-
-
-
-
-TEST_CASE("Test templated class yadayada")
-{
-	auto uber_struct = Neat::get_type<StructWithTemplatedClasses>();
-	REQUIRE(uber_struct != nullptr);
-	auto templated_class_type = Neat::get_type(uber_struct->fields[0].type);
-	REQUIRE(templated_class_type != nullptr);
-
-	REQUIRE(!templated_class_type->member_aliases.empty());
-	auto& first_alias = templated_class_type->member_aliases.front();
-	CHECK(first_alias.name == "value_type");
-	CHECK(first_alias.type == Neat::get_id<int>());
-	CHECK(first_alias.access == Neat::Access::Public);
 }

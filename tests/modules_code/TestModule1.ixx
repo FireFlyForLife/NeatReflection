@@ -107,34 +107,3 @@ public:
 	MyClassRef my_class_ref; // This field won't be reflected because you can't get a pointer to member if the type is a reference.
 	MyClassPtr my_class_ptr;
 };
-
-export template<typename T, size_t I>
-class TemplatedClass
-{
-public:
-	using value_type = T;
-
-	int i = I;
-	T* t_ptr;
-
-
-	void use_t(T& t) { (void)t; }
-	T get_t_as_42() const { return static_cast<T>(42); }
-};
-
-// TODO: Support this, see issue #12
-//export template<typename T>
-//class AnotherTemplatedClass
-//{
-//public:
-//	T a_value;
-//	T b_value{};
-//
-//	TemplatedClass<T, 42> sub_templated_value;
-//};
-
-export struct StructWithTemplatedClasses
-{
-	TemplatedClass<int, 3> member_1;
-	//AnotherTemplatedClass<double> member_2;
-};

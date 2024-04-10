@@ -67,7 +67,7 @@ private:
 	void scan(reflifc::TemplateId template_id, RecursionContext& ctx, ReflectableTypes& out_types);
 
 	void render(const ifc::FundamentalType& type);
-	void render(ReflectableType& type);
+	void render(ReflectableType& type, bool is_templated_type);
 	std::string render_field(std::string_view outer_class_type, ifc::Access default_access, const reflifc::Field& field, RecursionContext& ctx) const;
 	std::string render_method(std::string_view outer_class_type, ifc::Access default_access, const reflifc::Method& method, RecursionContext& ctx) const;
 	std::string render_base_class(std::string_view outer_class_type, ifc::Access default_access, const reflifc::BaseType& base_class, RecursionContext& ctx) const;
