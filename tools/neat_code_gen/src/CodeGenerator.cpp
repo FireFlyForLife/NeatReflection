@@ -129,7 +129,6 @@ void CodeGenerator::scan(reflifc::Scope scope_desc, RecursionContext& ctx, Refle
 
 void CodeGenerator::scan(reflifc::Declaration decl, RecursionContext& ctx, ReflectableTypes& out_types)
 {
-	auto aaa = decl.sort();
 	if (decl.is_scope())
 		scan(decl.as_scope(), decl, ctx, out_types);
 }
@@ -444,25 +443,27 @@ void CodeGenerator::scan(reflifc::TemplateId template_id, RecursionContext& ctx,
 	if (!is_type_visible_from_module(template_id, reflifc::Module{ ifc_file }, ctx)) {
 		return;
 	}
-	if (!template_id.primary().is_qualref()) {
+
+	if (!template_id.primary().is_qualref() || !template_id.primary().referenced_decl().is_template()) {
 		return;
 	}
 	
-	// TODO: Handle template specializations (#15)
-
 	auto templated_decl = template_id.primary().referenced_decl();
-	if (templated_decl.is_template() && templated_decl.as_template().entity().is_class_or_struct()) {
-		auto class_or_struct = templated_decl.as_template().entity().as_class_or_struct();
+	auto template_declaration = templated_decl.as_template();
+	
+	RecursionContext new_ctx{ ctx };
+	auto arguments = template_id.arguments();
+	new_ctx.template_argument_sets.emplace_back(arguments.begin(), arguments.end());
+	auto template_entity = resolve_template_entity(template_declaration, new_ctx);
+
+	if (template_entity.is_class_or_struct()) {
+		auto class_or_struct = template_entity.as_class_or_struct();
 
 		// Mark this type as visited, will be fill in at the end of this function
 		out_types.template_types.insert({ template_id, {} });
 		
 		ReflectableType template_type;
 		template_type.type_name = render_full_typename(template_id, ctx);
-
-		RecursionContext new_ctx{ ctx };
-		auto arguments = template_id.arguments();
-		new_ctx.template_argument_sets.emplace_back(arguments.begin(), arguments.end());
 
 		template_type.templates_context = new_ctx;
 

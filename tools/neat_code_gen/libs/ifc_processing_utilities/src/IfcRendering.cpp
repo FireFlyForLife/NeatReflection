@@ -427,9 +427,7 @@ std::string render_refered_declaration(reflifc::Declaration decl, RecursionConte
 	}
 	case ifc::DeclSort::Template:
 	{
-		reflifc::TemplateDeclaration template_declaration = decl.as_template();
-		//return render_refered_declaration(template_declaration.entity(), ctx);
-		return render_name(template_declaration.name(), ctx);
+		return render_name(decl.as_template().name(), ctx);
 	}
 	case ifc::DeclSort::Function:
 	{
@@ -673,14 +671,15 @@ bool is_type_visible_from_module(reflifc::Type type, reflifc::Module root_module
 	case ifc::TypeSort::Base:
 		return is_type_visible_from_module(type.as_base().type, root_module, ctx);
 	case ifc::TypeSort::Decltype:
-		return false; // I don't see a situation where this makes sense to reflect
+		return false; // Too complicated to support
 	case ifc::TypeSort::Placeholder: // Elaboration on a `auto` or `decltype(auto)` placeholder type
 		return is_type_visible_from_module(type.as_placeholder().elaboration(), root_module, ctx); 
 	case ifc::TypeSort::Forall: // A template template type
 		return is_type_visible_from_module(type.as_forall().subject(), root_module, ctx);
-		
-	// Unsupported:
 	case ifc::TypeSort::Tor: // Auto generated constructor type
+		return false; // I don't see a situation where this makes sense to reflect
+
+	// Unsupported:
 	case ifc::TypeSort::PointerToMember: // Not implemented by reflifc yet
 	case ifc::TypeSort::Tuple: // A list of types, not implemented by reflifc yet
 	case ifc::TypeSort::Unaligned: // __unaligned msvc specifier, not implemented yet by reflifc
@@ -990,10 +989,9 @@ reflifc::Type resolve_type(reflifc::Expression scope, std::string_view dependant
 	case ifc::ExprSort::NamedDecl:
 		return resolve_type(scope.referenced_decl(), dependant_name, ctx);
 	case ifc::ExprSort::Type:
-		return scope.as_type();
+		throw ContextualException("Type is not implemented yet for dependant typename lookup.");
 	case ifc::ExprSort::QualifiedName:
-		// TODO: This probably needs to be resolved recursively?
-		//scope.as_qualified_name().parts();
+		// TODO: This probably needs to be resolved recursively.
 		throw ContextualException("QualifiedName is not implemented yet by CodeGenerator.");
 	case ifc::ExprSort::TemplateId:
 	{
@@ -1025,10 +1023,66 @@ reflifc::Type resolve_type(reflifc::Declaration scope, std::string_view dependan
 		break;
 	}
 	case ifc::DeclSort::Template:
-		return resolve_type(scope.as_template().entity(), dependant_name, ctx);
+	{
+		reflifc::Declaration template_entity = resolve_template_entity(scope.as_template(), ctx);
+		return resolve_type(template_entity, dependant_name, ctx);
+	}
 	default:
 		break;
 	}
 
 	throw ContextualException("Could not resolve type.");
+}
+
+// Deal with template specializations
+reflifc::Declaration resolve_template_entity(reflifc::TemplateDeclaration template_decl, RecursionContext& ctx)
+{
+	reflifc::Declaration template_scope = template_decl.entity();
+
+	for (auto specialization : template_decl.template_specializations()) {
+		switch (specialization.sort()) {
+		case ifc::DeclSort::Specialization:
+			if (does_specialization_fit(specialization.as_specialization(), ctx)) {
+				template_scope = specialization.as_specialization().entity();
+			}
+			break;
+		case ifc::DeclSort::PartialSpecialization:
+			if (does_specialization_fit(specialization.as_partial_specialization(), ctx)) {
+				template_scope = specialization.as_partial_specialization().entity();
+			}
+			break;
+		default:
+			throw ContextualException(std::format("Unexpected specialization declaration: {}",
+				decl_sort_to_string(specialization.sort())));
+		}
+	}
+
+	return template_scope;
+}
+
+bool does_specialization_fit(reflifc::Specialization specialization, RecursionContext& ctx)
+{
+	auto specialization_arguments = specialization.form().arguments();
+	auto& template_arguments = ctx.template_argument_sets.back();
+
+	if (template_arguments.size() != specialization_arguments.size()) {
+		return false;
+	}
+
+	for (size_t i = 0; i < template_arguments.size(); ++i) {
+		// TODO: Support Non-Type template parameters
+		auto template_argument_rendered = render_full_typename(template_arguments[i], ctx);
+		auto specialization_argument_rendered = render_full_typename(specialization_arguments[i], ctx);
+		if (template_argument_rendered != specialization_argument_rendered) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+bool does_specialization_fit(reflifc::PartialSpecialization specialization, RecursionContext& ctx)
+{
+	// TODO: Implement partial specialization
+	return false;
 }

@@ -72,3 +72,7 @@ std::optional<std::string_view> get_declaration_name(reflifc::Declaration decl, 
 reflifc::Type resolve_type(reflifc::PathExpression path, RecursionContext& ctx);
 reflifc::Type resolve_type(reflifc::Expression scope, std::string_view dependant_name, RecursionContext& ctx);
 reflifc::Type resolve_type(reflifc::Declaration scope, std::string_view dependant_name, RecursionContext& ctx);
+
+reflifc::Declaration resolve_template_entity(reflifc::TemplateDeclaration template_decl, RecursionContext& ctx); // Deal with template specializations
+bool does_specialization_fit(reflifc::Specialization specialization, RecursionContext& ctx);
+bool does_specialization_fit(reflifc::PartialSpecialization specialization, RecursionContext& ctx);

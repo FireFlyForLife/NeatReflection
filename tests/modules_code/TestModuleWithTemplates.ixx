@@ -45,14 +45,15 @@ public:
 	T5 e;
 };
 
-template<typename T> struct TransformIntTrait { using type = T; };
-//template<> struct TransformIntTrait<int> { using type = float; }; // TODO: Enable again when #15 is fixed
-
 export template<typename T>
 struct LittleWrapper
 {
 	T value;
 };
+
+template<typename T> struct TransformIntTrait { using type = T; };
+template<> struct TransformIntTrait<int> { using type = float; };
+template<typename T> struct TransformIntTrait<LittleWrapper<T>> { using type = SomeEmptyStruct; };
 
 export template<typename T>
 class LittleQuadrupleWrapperClass

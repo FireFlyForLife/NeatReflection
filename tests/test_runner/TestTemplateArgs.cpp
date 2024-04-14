@@ -78,18 +78,17 @@ TEST_CASE("Test templated class with arguments")
 
 		{
 			// QuadrupleTemplatedClass<T, typename TransformIntTrait<T>::type, 42, LittleWrapper<T>, SomeEmptyStruct>
-			// (Turns into: QuadrupleTemplatedClass<int, int, 42, LittleWrapper<int>, SomeEmptyStruct>)
-			// TODO: #15, second template arg will be resolved to `float` instead.
+			// (Turns into: QuadrupleTemplatedClass<int, float, 42, LittleWrapper<int>, SomeEmptyStruct>)
 			auto quadruple_templated_class = Neat::get_type(little_quadruple_wrapper_class->fields[1].type);
 			REQUIRE(quadruple_templated_class != nullptr);
-			CHECK(quadruple_templated_class->name == "QuadrupleTemplatedClass<int, int, 42, LittleWrapper<int>, SomeEmptyStruct>");
-			CHECK(quadruple_templated_class->id == Neat::get_id<QuadrupleTemplatedClass<int, int, 42, LittleWrapper<int>, SomeEmptyStruct>>());
+			CHECK(quadruple_templated_class->name == "QuadrupleTemplatedClass<int, float, 42, LittleWrapper<int>, SomeEmptyStruct>");
+			CHECK(quadruple_templated_class->id == Neat::get_id<QuadrupleTemplatedClass<int, float, 42, LittleWrapper<int>, SomeEmptyStruct>>());
 		
 			REQUIRE(quadruple_templated_class->template_arguments.size() == 5);
 			auto first_template_arg = std::get<Neat::TemplateTypeId>(quadruple_templated_class->template_arguments[0].type_or_value); // Will throw exception for incorrect variant
 			CHECK(first_template_arg == Neat::get_id<int>());
 			auto second_template_arg = std::get<Neat::TemplateTypeId>(quadruple_templated_class->template_arguments[1].type_or_value); // Will throw exception for incorrect variant
-			CHECK(second_template_arg == Neat::get_id<int>());
+			CHECK(second_template_arg == Neat::get_id<float>());
 			auto third_template_arg = std::get<Neat::Any>(quadruple_templated_class->template_arguments[2].type_or_value); // Will throw exception for incorrect variant
 			CHECK(third_template_arg.value<int>() == 42);
 			auto fourth_template_arg = std::get<Neat::TemplateTypeId>(quadruple_templated_class->template_arguments[3].type_or_value); // Will throw exception for incorrect variant
