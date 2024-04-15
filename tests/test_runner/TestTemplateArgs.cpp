@@ -13,7 +13,7 @@ TEST_CASE("Test templated class with arguments")
 
 	CHECK(struct_with_template_class->name == "StructWithTemplatedClasses");
 	CHECK(struct_with_template_class->id == Neat::get_id<StructWithTemplatedClasses>());
-	REQUIRE(struct_with_template_class->fields.size() == 4);
+	REQUIRE(struct_with_template_class->fields.size() == 6);
 
 	{
 		// TemplatedClass<int, 3>
@@ -96,5 +96,23 @@ TEST_CASE("Test templated class with arguments")
 			auto fifth_template_arg = std::get<Neat::TemplateTypeId>(quadruple_templated_class->template_arguments[4].type_or_value); // Will throw exception for incorrect variant
 			CHECK(fifth_template_arg == Neat::get_id<SomeEmptyStruct>());
 		}
+	}
+
+	{
+		// TransformForthTwoTrait<99>::type
+		// (Turns into: IntWrapper<99>
+		auto int_wrapper_99 = Neat::get_type(struct_with_template_class->fields[4].type);
+		REQUIRE(int_wrapper_99 != nullptr);
+		CHECK(int_wrapper_99->name == "IntWrapper<99>");
+		CHECK(int_wrapper_99->id == Neat::get_id<IntWrapper<99>>());
+	}
+
+	{
+		// TransformFortyTwoTrait<42>::type
+		// (Turns into: IntWrapper<61453>
+		auto int_wrapper_42 = Neat::get_type(struct_with_template_class->fields[5].type);
+		REQUIRE(int_wrapper_42 != nullptr);
+		CHECK(int_wrapper_42->name == "IntWrapper<61453>");
+		CHECK(int_wrapper_42->id == Neat::get_id<IntWrapper<61453>>());
 	}
 }

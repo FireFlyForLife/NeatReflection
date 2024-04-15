@@ -51,9 +51,18 @@ struct LittleWrapper
 	T value;
 };
 
+export template<int I> 
+struct IntWrapper
+{
+	const int value = I;
+};
+
 template<typename T> struct TransformIntTrait { using type = T; };
 template<> struct TransformIntTrait<int> { using type = float; };
 template<typename T> struct TransformIntTrait<LittleWrapper<T>> { using type = SomeEmptyStruct; };
+
+template<int I> struct TransformFortyTwoTrait { using type = IntWrapper<I>; };
+template<> struct TransformFortyTwoTrait<42> { using type = IntWrapper<0xF00D>; };
 
 export template<typename T>
 class LittleQuadrupleWrapperClass
@@ -70,4 +79,6 @@ export struct StructWithTemplatedClasses
 	AnotherTemplatedClass<double> member_2;
 	QuadrupleTemplatedClass<int, double, 42, SomeEmptyStruct, unsigned char> member_3;
 	LittleQuadrupleWrapperClass<int> member_4;
+	TransformFortyTwoTrait<99>::type member_5;
+	TransformFortyTwoTrait<42>::type member_6;
 };

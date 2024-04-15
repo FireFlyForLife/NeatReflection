@@ -1070,7 +1070,6 @@ bool does_specialization_fit(reflifc::Specialization specialization, RecursionCo
 	}
 
 	for (size_t i = 0; i < template_arguments.size(); ++i) {
-		// TODO: Support Non-Type template parameters
 		auto template_argument_rendered = render_full_typename(template_arguments[i], ctx);
 		auto specialization_argument_rendered = render_full_typename(specialization_arguments[i], ctx);
 		if (template_argument_rendered != specialization_argument_rendered) {

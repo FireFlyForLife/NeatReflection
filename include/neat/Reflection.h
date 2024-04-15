@@ -182,9 +182,19 @@ namespace Neat
 		std::vector<BaseClass> bases, std::vector<Field> fields, std::vector<Method> methods,
 		std::vector<TypeAlias> member_aliases, std::vector<TemplateArgument> template_arguments)
 	{
+		DefaultConstructor default_constructor = nullptr;
+		if constexpr (std::is_default_constructible_v<T>) {
+			default_constructor = &Detail::default_constructor_erased<T>;
+		}
+
+		Destructor destructor = nullptr;
+		if constexpr (!std::is_trivially_destructible_v<T>) {
+			destructor = &Detail::destructor_erased<T>;
+		}
+
 		return Type{
-			.default_constructor = (std::is_default_constructible_v<T> ? &Detail::destructor_erased<T> : nullptr),
-			.destructor = (std::is_trivially_destructible_v<T> ? nullptr : &Detail::destructor_erased<T>),
+			.default_constructor = default_constructor,
+			.destructor = destructor,
 			.name = std::string{ name },
 			.id = id,
 			.size = sizeof(T),
@@ -223,16 +233,23 @@ namespace Neat
 			assert(object.type_id == get_id<TObject>());
 
 			TObject* object_ = static_cast<TObject*>(object.value_ptr);
-			return { &(object_->*PtrToMember), get_id<TType>() };
+
+			TType* address = &(object_->*PtrToMember);
+			return AnyPtr{ (void*)address, get_id<TType>()};
 		}
 	}
 
 	template<typename TObject, typename TType, TType TObject::* PtrToMember>
 	Field Field::create(std::string_view name, Access access)
 	{
+		SetValueFunction set_value = nullptr;
+		if constexpr (std::is_assignable_v<TType&, TType>) {
+			set_value = &Detail::set_field_erased<TObject, TType, PtrToMember>;
+		}
+
 		return Field{
 			.get_value = &Detail::get_field_erased<TObject, TType, PtrToMember>,
-			.set_value = &Detail::set_field_erased<TObject, TType, PtrToMember>,
+			.set_value = set_value,
 			.get_address = &Detail::get_field_address_erased<TObject, TType, PtrToMember>,
 			.object_type = get_id<TObject>(),
 			.type = get_id<TType>(),
