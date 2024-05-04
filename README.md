@@ -1,5 +1,5 @@
 # NeatReflection
-![Build and Tests](https://github.com/github/docs/actions/workflows/build.yml/badge.svg?event=push)
+![Build and Test status](https://github.com/FireFlyForLife/NeatReflection/actions/workflows/build.yml/badge.svg?event=push)
 
 A neat and tidy reflection system. Based on C++20 modules output (.ifc)
 
