@@ -50,6 +50,7 @@ CodeGenerator::CodeGenerator(const ifc::File& ifc_file, ifc::Environment& enviro
 
 void CodeGenerator::write_cpp_file(reflifc::Module module, std::ostream& out)
 {
+	// Get module name
 	auto unit = module.unit();
 	if (!unit.is_primary()) // For now
 	{
@@ -58,36 +59,56 @@ void CodeGenerator::write_cpp_file(reflifc::Module module, std::ostream& out)
 
 	const auto module_name = unit.name();
 	
+	// Scan module for all types that can be reflected
 	ReflectableTypes reflectable_types{};
 	{
 		ContextArea scan_area{ "While scanning for types."sv };
 		RecursionContext ctx{ environment, {} };
-		scan(module.global_namespace(), ctx, reflectable_types);
+
+		try {
+			scan(module.global_namespace(), ctx, reflectable_types);
+		} catch (ContextualException& e) {
+			std::cout << "Warning: Could not scan all types for module. Reason: " << e.what() << '\n';
+		}
 	}
 
+	// Render reflectable types
 	{
 		ContextArea render_fundamental_area{ "While rendering fundamental types."sv };
 		for (auto& reflectable_fundamental_type : reflectable_types.fundamental_types) {
-			render(reflectable_fundamental_type.as_fundamental());
+			try {
+				render(reflectable_fundamental_type.as_fundamental());
+			} catch (ContextualException& e) {
+				std::cout << "Warning: Could not render fundamental type. Reason: " << e.what() << '\n';
+			}
 		}
 	}
 	
 	{
 		ContextArea render_area{ "While rendering types."sv };
 		for (auto& reflectable_type : reflectable_types.types) {
-			const bool is_templated_type = false;
-			render(reflectable_type.second, is_templated_type);
+			try {
+				const bool is_templated_type = false;
+				render(reflectable_type.second, is_templated_type);
+			} catch (ContextualException& e) {
+				std::cout << "Warning: Could not render type. Reason: " << e.what() << '\n';
+			}
 		}
 	}
 
 	{
 		ContextArea render_area{ "While rendering templated types."sv };
 		for (auto& reflectable_templated_type : reflectable_types.template_types) {
-			const bool is_templated_type = true;
-			render(reflectable_templated_type.second, is_templated_type);
+			try {
+				const bool is_templated_type = true;
+				render(reflectable_templated_type.second, is_templated_type);
+			} catch (ContextualException& e) {
+				std::cout << "Warning: Could not render templated type. Reason: " << e.what() << '\n';
+			}
 		}
 	}
 
+	// Write the generated code to the output stream
 	out << std::format(
 R"(module;
 #include "Neat/Reflection.h"
@@ -123,7 +144,11 @@ void CodeGenerator::scan(reflifc::Scope scope_desc, RecursionContext& ctx, Refle
 	auto declarations = scope_desc.get_declarations();
 	for (auto declaration : declarations)
 	{
-		scan(declaration, ctx, out_types);
+		try {
+			scan(declaration, ctx, out_types);
+		} catch (ContextualException& e) { 
+			std::cout << "Warning: Could not scan declaration, will be skipping it. Reason: " << e.what() << '\n';
+		}
 	}
 }
 
@@ -179,22 +204,19 @@ static bool is_reference_type(reflifc::Type type, RecursionContext& ctx)
 
 void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl, RecursionContext& ctx, ReflectableTypes& out_types)
 {
-	if (out_types.types.contains(decl))
-	{
+	if (out_types.types.contains(decl)) {
 		return;
 	}
-	if (!is_type_visible_from_module(decl, reflifc::Module{ ifc_file }, ctx))
-	{
+	if (!is_type_visible_from_module(decl, reflifc::Module{ ifc_file }, ctx)) {
 		return;
 	}
 
 	ReflectableType type{ };
+	type.type_name = render_full_typename(decl, ctx);
+	type.default_access = scope_decl.access();
 
 	// Mark this type as being visited, at the end of this function we will fill in the full member info.
 	out_types.types.insert({ decl, type });
-
-	type.type_name = render_full_typename(decl, ctx);
-	type.default_access = scope_decl.access();
 
 	const bool reflect_privates = can_reflect_private_members(decl, reflifc::Module{ifc_file}, ctx);
 
@@ -261,7 +283,7 @@ void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration
 	out_types.types.insert_or_assign(decl, std::move(type));
 }
 
-static bool is_concrete_type(ifc::TypeBasis type)
+static bool is_concrete_fundamental_type(ifc::TypeBasis type)
 {
 	switch(type) {
 	case ifc::TypeBasis::Void:
@@ -283,10 +305,8 @@ void CodeGenerator::scan(reflifc::Type type, RecursionContext& ctx, ReflectableT
 	switch (type.sort())
 	{
 	case ifc::TypeSort::Fundamental:
-	{
-		assert(is_concrete_type(type.as_fundamental().basis));
+		assert(is_concrete_fundamental_type(type.as_fundamental().basis));
 		out_types.fundamental_types.insert(type);
-	}
 	break;
 	case ifc::TypeSort::Designated:
 		scan(type.designation(), ctx, out_types);
@@ -371,70 +391,6 @@ void CodeGenerator::scan(reflifc::Expression expression, RecursionContext& ctx, 
 	}
 }
 
-static reflifc::Declaration gib_declaration(reflifc::Expression expression, RecursionContext& ctx);
-static reflifc::Declaration gib_declaration(reflifc::Type type, RecursionContext& ctx)
-{
-	switch (type.sort()) {
-	case ifc::TypeSort::Fundamental:
-		// TODO: Implement
-	break;
-	case ifc::TypeSort::Designated:
-		return type.designation();
-	case ifc::TypeSort::Syntactic:
-		return gib_declaration(type.as_syntactic(), ctx);
-	case ifc::TypeSort::Pointer:
-		return gib_declaration(type.as_pointer().pointee, ctx);
-	case ifc::TypeSort::LvalueReference:
-		return gib_declaration(type.as_lvalue_reference().referee, ctx);
-	case ifc::TypeSort::RvalueReference:
-		return gib_declaration(type.as_rvalue_reference().referee, ctx);
-	case ifc::TypeSort::Function:
-		// TODO: Implemenent
-		break;
-	case ifc::TypeSort::Method:
-		// TODO: Implemenent
-		break;
-	case ifc::TypeSort::Array:
-		return gib_declaration(type.as_array().element(), ctx);
-	case ifc::TypeSort::Qualified:
-		return gib_declaration(type.as_qualified().unqualified(), ctx);
-	case ifc::TypeSort::Base:
-		return gib_declaration(type.as_base().type, ctx);
-	case ifc::TypeSort::Tuple: // TODO: Is this a typelist? if so why can't we iterate it?
-		break;
-	case ifc::TypeSort::Forall:
-		return gib_declaration(type.as_forall().subject(), ctx);
-
-		// Not currently supported:
-	case ifc::TypeSort::PointerToMember: // Not implemented yet by reflifc
-	case ifc::TypeSort::Expansion:
-	case ifc::TypeSort::Typename:
-	case ifc::TypeSort::Decltype:
-	case ifc::TypeSort::Placeholder:
-	case ifc::TypeSort::Unaligned: // Not implemented yet by reflifc
-	case ifc::TypeSort::SyntaxTree: // Not implemented yet by reflifc
-		break;
-	}
-
-	throw ContextualException(std::format("Unexpected type sort encountered while extracting declaration from type: {}",
-		type_sort_to_string(type.sort())));
-}
-
-static reflifc::Declaration gib_declaration(reflifc::Expression expression, RecursionContext& ctx)
-{
-	switch (expression.sort()) {
-	case ifc::ExprSort::NamedDecl:
-		return expression.referenced_decl();
-		break;
-	case ifc::ExprSort::Type:
-		gib_declaration(expression.as_type(), ctx);
-		break;
-	case ifc::ExprSort::TemplateId:
-		gib_declaration(expression.as_template_id().primary(), ctx);
-		break;
-	}
-}
-
 void CodeGenerator::scan(reflifc::TemplateId template_id, RecursionContext& ctx, ReflectableTypes& out_types)
 {
 	if (out_types.template_types.contains(template_id)) {
@@ -458,14 +414,14 @@ void CodeGenerator::scan(reflifc::TemplateId template_id, RecursionContext& ctx,
 
 	if (template_entity.is_class_or_struct()) {
 		auto class_or_struct = template_entity.as_class_or_struct();
-
-		// Mark this type as visited, will be fill in at the end of this function
-		out_types.template_types.insert({ template_id, {} });
 		
 		ReflectableType template_type;
 		template_type.type_name = render_full_typename(template_id, ctx);
-
 		template_type.templates_context = new_ctx;
+		template_type.default_access = class_or_struct.access();
+
+		// Mark this type as visited, will be fill in at the end of this function
+		out_types.template_types.insert({ template_id, template_type });
 
 		const bool reflect_privates = can_reflect_private_members(templated_decl, reflifc::Module{ ifc_file }, new_ctx);
 

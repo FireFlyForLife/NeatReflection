@@ -681,9 +681,9 @@ bool is_type_visible_from_module(reflifc::Type type, reflifc::Module root_module
 
 	// Unsupported:
 	case ifc::TypeSort::PointerToMember: // Not implemented by reflifc yet
-	case ifc::TypeSort::Tuple: // A list of types, not implemented by reflifc yet
+	case ifc::TypeSort::Tuple: // A list of types, not accesible from `Type` in reflifc (yet?)
 	case ifc::TypeSort::Unaligned: // __unaligned msvc specifier, not implemented yet by reflifc
-	case ifc::TypeSort::SyntaxTree: // a old token style syntax tree type. Not going to be supported and also not supported by reflifc
+	case ifc::TypeSort::SyntaxTree: // An old token style syntax tree type. Not going to be supported and also not supported by reflifc
 
 	default:
 		throw ContextualException{ std::format("Unexpected type while checking if the type was exported. type sort: {}",
@@ -701,7 +701,6 @@ bool is_type_visible_from_module(reflifc::FunctionType function, reflifc::Module
 {
 	return is_type_visible_from_module(function.return_type(), root_module, ctx) &&
 		std::ranges::all_of(function.parameters(), [root_module, &ctx](reflifc::Type type) { return is_type_visible_from_module(type, root_module, ctx); });
-
 }
 
 bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module root_module, RecursionContext& ctx)
@@ -778,17 +777,12 @@ bool is_type_visible_from_module(reflifc::TemplateId template_id, reflifc::Modul
 
 bool is_type_visible_from_module(reflifc::PathExpression path, reflifc::Module root_module, RecursionContext& ctx)
 {
-	if (!is_type_visible_from_module(path.scope(), root_module, ctx)) {
+	try {
+		auto resolved_type = resolve_type(path, ctx);
+		return is_type_visible_from_module(resolved_type, root_module, ctx);
+	} catch (ContextualException& e) {
 		return false;
 	}
-	
-	auto t = resolve_type(path, ctx);
-
-	if (!is_type_visible_from_module(t, root_module, ctx)) {
-		return false;
-	}
-
-	return true;
 }
 
 static bool is_module_imported_in_exported_module(reflifc::Module to_check, reflifc::Module root_module, ifc::Environment& environment)
@@ -1052,7 +1046,7 @@ reflifc::Declaration resolve_template_entity(reflifc::TemplateDeclaration templa
 			}
 			break;
 		default:
-			throw ContextualException(std::format("Unexpected specialization declaration: {}",
+			throw ContextualException(std::format("Unexpected specialization declaration sort: {}",
 				decl_sort_to_string(specialization.sort())));
 		}
 	}

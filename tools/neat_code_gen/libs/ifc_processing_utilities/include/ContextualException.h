@@ -7,6 +7,11 @@
 #include <source_location>
 
 
+// Throws a ContextualException if the statement is false
+void verify(bool success, std::source_location source_location = std::source_location::current());
+void verify(bool success, std::string_view additional_message, std::source_location source_location = std::source_location::current());
+
+// Exception that carries context information about what happened earlier in the stack, via ContextArea's
 class ContextualException : public std::exception
 {
 public:
@@ -17,9 +22,9 @@ public:
 	~ContextualException();
 
 	ContextualException(const ContextualException&) = default;
-	ContextualException(ContextualException&&) = default;
+	ContextualException(ContextualException&&) noexcept = default;
 	ContextualException& operator=(const ContextualException&) = default;
-	ContextualException& operator=(ContextualException&&) = default;
+	ContextualException& operator=(ContextualException&&) noexcept = default;
 
 	// Accessors
 	[[nodiscard]] char const* what() const noexcept override; // Note: Not threadsafe
@@ -31,8 +36,7 @@ private:
 	mutable std::string formatted_message;
 };
 
-void verify(bool success, std::source_location source_location = std::source_location::current());
-
+// RAII class that adds more context information for when ContextualException is thrown
 template<typename... TArgs>
 class ContextArea
 {
@@ -52,17 +56,25 @@ private:
 // Implementation
 // ============================================================================
 
-namespace Detail
-{
-	void context_area_add_context_current_thread(std::string&& context_point);
-}
-
 inline void verify(bool success, std::source_location source_location)
 {
 	if (!success) [[unlikely]] {
 		throw ContextualException(std::format("Failed to verify statement at {}:{},{} in '{}'.",
 			source_location.function_name(), source_location.line(), source_location.column(), source_location.file_name()));
 	}
+}
+
+inline void verify(bool success, std::string_view additional_message, std::source_location source_location)
+{
+	if (!success) [[unlikely]] {
+		throw ContextualException(std::format("Failed to verify statement, message: \"{}\".\nStatement at{}:{}, {} in '{}'.",
+			additional_message, source_location.function_name(), source_location.line(), source_location.column(), source_location.file_name()));
+	}
+}
+
+namespace Detail
+{
+	void context_area_add_context_current_thread(std::string&& context_point);
 }
 
 template<typename... TArgs>
