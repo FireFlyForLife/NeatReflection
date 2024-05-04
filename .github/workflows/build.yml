@@ -29,6 +29,7 @@ jobs:
       with:
         build-dir: ${{env.SOLUTION_BUILD_FOLDER}}
         generator: Visual Studio 17 2022
+        args: -A x64
         run-build: false
           
     - name: Build
@@ -37,4 +38,4 @@ jobs:
 
     - name: Run Tests
       working-directory: ${{env.GITHUB_WORKSPACE}}${{env.SOLUTION_BUILD_FOLDER}}\tests\${{env.BUILD_CONFIGURATION}}
-      run: NeatReflectionTestRunner.exe
+      run: .\NeatReflectionTestRunner.exe
