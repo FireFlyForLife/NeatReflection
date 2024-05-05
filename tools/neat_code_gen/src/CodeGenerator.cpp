@@ -139,7 +139,7 @@ namespace Neat
 	out.flush();
 }
 
-void CodeGenerator::scan(reflifc::Scope scope_desc, RecursionContext& ctx, ReflectableTypes& out_types)
+void CodeGenerator::scan(reflifc::Scope scope_desc, RecursionContextArg ctx, ReflectableTypes& out_types)
 {
 	auto declarations = scope_desc.get_declarations();
 	for (auto declaration : declarations)
@@ -152,13 +152,13 @@ void CodeGenerator::scan(reflifc::Scope scope_desc, RecursionContext& ctx, Refle
 	}
 }
 
-void CodeGenerator::scan(reflifc::Declaration decl, RecursionContext& ctx, ReflectableTypes& out_types)
+void CodeGenerator::scan(reflifc::Declaration decl, RecursionContextArg ctx, ReflectableTypes& out_types)
 {
 	if (decl.is_scope())
 		scan(decl.as_scope(), decl, ctx, out_types);
 }
 
-void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl, RecursionContext& ctx, ReflectableTypes& out_types)
+void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl, RecursionContextArg ctx, ReflectableTypes& out_types)
 {
 	switch (scope_decl.kind())
 	{
@@ -174,8 +174,8 @@ void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declarat
 		break;
 	}
 }
-static bool is_reference_type(reflifc::Type type, RecursionContext& ctx);
-static bool is_reference_type(reflifc::Declaration decl, RecursionContext& ctx)
+static bool is_reference_type(reflifc::Type type, RecursionContextArg ctx);
+static bool is_reference_type(reflifc::Declaration decl, RecursionContextArg ctx)
 {
 	if (decl.is_reference()) {
 		return is_reference_type(decl.as_reference().referenced_declaration(*ctx.environment), ctx);
@@ -189,7 +189,7 @@ static bool is_reference_type(reflifc::Declaration decl, RecursionContext& ctx)
 	return false;
 }
 
-static bool is_reference_type(reflifc::Type type, RecursionContext& ctx)
+static bool is_reference_type(reflifc::Type type, RecursionContextArg ctx)
 {
 	if (type.is_lvalue_reference() || type.is_rvalue_reference()) {
 		return true;
@@ -202,7 +202,7 @@ static bool is_reference_type(reflifc::Type type, RecursionContext& ctx)
 	return false;
 }
 
-void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl, RecursionContext& ctx, ReflectableTypes& out_types)
+void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl, RecursionContextArg ctx, ReflectableTypes& out_types)
 {
 	if (out_types.types.contains(decl)) {
 		return;
@@ -300,7 +300,7 @@ static bool is_concrete_fundamental_type(ifc::TypeBasis type)
 	}
 }
 
-void CodeGenerator::scan(reflifc::Type type, RecursionContext& ctx, ReflectableTypes& out_types)
+void CodeGenerator::scan(reflifc::Type type, RecursionContextArg ctx, ReflectableTypes& out_types)
 {
 	switch (type.sort())
 	{
@@ -371,7 +371,7 @@ void CodeGenerator::scan(reflifc::Type type, RecursionContext& ctx, ReflectableT
 	}
 }
 
-void CodeGenerator::scan(reflifc::Expression expression, RecursionContext& ctx, ReflectableTypes& out_types)
+void CodeGenerator::scan(reflifc::Expression expression, RecursionContextArg ctx, ReflectableTypes& out_types)
 {
 	switch (expression.sort())
 	{
@@ -391,7 +391,7 @@ void CodeGenerator::scan(reflifc::Expression expression, RecursionContext& ctx, 
 	}
 }
 
-void CodeGenerator::scan(reflifc::TemplateId template_id, RecursionContext& ctx, ReflectableTypes& out_types)
+void CodeGenerator::scan(reflifc::TemplateId template_id, RecursionContextArg ctx, ReflectableTypes& out_types)
 {
 	if (out_types.template_types.contains(template_id)) {
 		return;
@@ -558,7 +558,7 @@ void CodeGenerator::render(ReflectableType& type, bool is_templated_type)
 )", type.type_name, bases, fields, methods, aliases, template_arguments);
 }
 
-std::string CodeGenerator::render_field(std::string_view outer_class_type, ifc::Access default_access, const reflifc::Field& field, RecursionContext& ctx) const
+std::string CodeGenerator::render_field(std::string_view outer_class_type, ifc::Access default_access, const reflifc::Field& field, RecursionContextArg ctx) const
 {
 	const auto field_type = render_full_typename(field.type(), ctx);
 	const auto name = field.name();
@@ -567,7 +567,7 @@ std::string CodeGenerator::render_field(std::string_view outer_class_type, ifc::
 	return std::format(R"(Field::create<{0}, {1}, &{0}::{2}>("{2}", {3}))", outer_class_type, field_type, name, access);
 }
 
-std::string CodeGenerator::render_method(std::string_view outer_class_type, ifc::Access default_access, const reflifc::Method& method, RecursionContext& ctx) const
+std::string CodeGenerator::render_method(std::string_view outer_class_type, ifc::Access default_access, const reflifc::Method& method, RecursionContextArg ctx) const
 {
 	const auto method_type = method.type();
 	const auto return_type = render_full_typename(method_type.return_type(), ctx);
@@ -580,7 +580,7 @@ std::string CodeGenerator::render_method(std::string_view outer_class_type, ifc:
 	return std::format(R"(Method::create<({6})&{0}::{4}, {0}, {1}{2}{3}>("{4}", {5}))", outer_class_type, return_type, begin_params_delimiter, params, name, access, method_ptr_type);
 }
 
-std::string CodeGenerator::render_base_class(std::string_view outer_class_type, ifc::Access default_access, const reflifc::BaseType& base_class, RecursionContext& ctx) const
+std::string CodeGenerator::render_base_class(std::string_view outer_class_type, ifc::Access default_access, const reflifc::BaseType& base_class, RecursionContextArg ctx) const
 {
 	// If outer type is a class or struct, the default access is private or public
 	auto access_string = render_as_neat_access_enum(base_class.access, default_access);
@@ -590,7 +590,7 @@ std::string CodeGenerator::render_base_class(std::string_view outer_class_type, 
 	return std::format(R"(BaseClass{{ get_id<{0}>(), {1} }})", type_name, access_string);
 }
 
-std::string CodeGenerator::render_member_alias(const reflifc::AliasDeclaration& member_alias, ifc::Access default_access, RecursionContext& ctx) const
+std::string CodeGenerator::render_member_alias(const reflifc::AliasDeclaration& member_alias, ifc::Access default_access, RecursionContextArg ctx) const
 {
 	auto alias_name = member_alias.name();
 	const auto field_type = render_full_typename(member_alias.aliasee(), ctx);
@@ -599,7 +599,7 @@ std::string CodeGenerator::render_member_alias(const reflifc::AliasDeclaration& 
 	return std::format(R"(TypeAlias{{ "{0}", get_id<{1}>(), {2} }})", alias_name, field_type, access);
 }
 
-std::string CodeGenerator::render_template_argument(const reflifc::Expression& template_arg, RecursionContext& ctx) const
+std::string CodeGenerator::render_template_argument(const reflifc::Expression& template_arg, RecursionContextArg ctx) const
 {
 	std::string rendered_argument;
 	bool is_type_argument;

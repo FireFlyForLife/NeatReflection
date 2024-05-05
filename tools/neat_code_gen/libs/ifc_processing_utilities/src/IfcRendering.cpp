@@ -61,7 +61,7 @@ std::pair<reflifc::Expression, RecursionContext> RecursionContext::get_template_
 	return { argument, relative_ctx };
 }
 
-std::string render_full_typename(reflifc::Type type, RecursionContext& ctx)
+std::string render_full_typename(reflifc::Type type, RecursionContextArg ctx)
 {
 	switch (type.sort())
 	{
@@ -119,7 +119,7 @@ std::string render_full_typename(reflifc::Type type, RecursionContext& ctx)
 	}
 }
 
-std::string render_full_typename(reflifc::FunctionType function_type, RecursionContext& ctx) // U (*)(Args...);
+std::string render_full_typename(reflifc::FunctionType function_type, RecursionContextArg ctx) // U (*)(Args...);
 {
 	auto return_type = render_full_typename(function_type.return_type(), ctx);
 	std::string parameter_types;
@@ -212,7 +212,7 @@ std::string render_full_typename(const ifc::FundamentalType& type)
 }
 
 
-std::string render_full_typename(reflifc::TemplateId template_id, RecursionContext& ctx)
+std::string render_full_typename(reflifc::TemplateId template_id, RecursionContextArg ctx)
 {
 	auto template_arguments = template_id.arguments();
 	RecursionContext new_ctx{ ctx };
@@ -223,7 +223,7 @@ std::string render_full_typename(reflifc::TemplateId template_id, RecursionConte
 		render_full_typename(template_id.arguments(), ctx));
 }
 
-std::string render_full_typename(reflifc::Expression expr, RecursionContext& ctx)
+std::string render_full_typename(reflifc::Expression expr, RecursionContextArg ctx)
 {
 	switch (expr.sort())
 	{
@@ -269,7 +269,7 @@ std::string render_full_typename(reflifc::Literal literal)
 	}
 }
 
-std::string render_full_typename(reflifc::TupleExpressionView tuple, RecursionContext& ctx)
+std::string render_full_typename(reflifc::TupleExpressionView tuple, RecursionContextArg ctx)
 {
 	std::string rendered;
 	rendered.reserve(tuple.size() * 8); // Preallocate a reasonable amount
@@ -289,13 +289,13 @@ std::string render_full_typename(reflifc::TupleExpressionView tuple, RecursionCo
 	return rendered;
 }
 
-std::string render_full_typename(reflifc::Declaration decl, RecursionContext& ctx)
+std::string render_full_typename(reflifc::Declaration decl, RecursionContextArg ctx)
 {
 	return render_namespace(decl, ctx) + render_refered_declaration(decl, ctx);
 }
 
 
-std::string render_method_pointer(reflifc::MethodType type, std::string_view outer_class_type, RecursionContext& ctx)
+std::string render_method_pointer(reflifc::MethodType type, std::string_view outer_class_type, RecursionContextArg ctx)
 {
 	const auto return_type = render_full_typename(type.return_type(), ctx);
 	const auto parameter_types = render_full_typename_list(type.parameters(), ctx);
@@ -305,7 +305,7 @@ std::string render_method_pointer(reflifc::MethodType type, std::string_view out
 }
 
 
-std::string render_full_typename_list(reflifc::TupleTypeView types, RecursionContext& ctx)
+std::string render_full_typename_list(reflifc::TupleTypeView types, RecursionContextArg ctx)
 {
 	auto joined_types = std::string{};
 	joined_types.reserve(types.size() * 8);
@@ -379,7 +379,7 @@ std::string render_function_type_traits(ifc::FunctionTypeTraits traits)
 }
 
 
-std::string render_name(reflifc::Name name, RecursionContext& ctx)
+std::string render_name(reflifc::Name name, RecursionContextArg ctx)
 {
 	if (!name) {
 		return "";
@@ -402,14 +402,14 @@ std::string render_name(reflifc::Name name, RecursionContext& ctx)
 	}
 }
 
-std::string render_name(reflifc::SpecializationName name, RecursionContext& ctx)
+std::string render_name(reflifc::SpecializationName name, RecursionContextArg ctx)
 {
 	auto primary = render_name(name.primary(), ctx);
 	auto args_rendered = render_full_typename(name.template_arguments(), ctx);
 	return primary + '<' + args_rendered + '>';
 }
 
-std::string render_refered_declaration(reflifc::Declaration decl, RecursionContext& ctx)
+std::string render_refered_declaration(reflifc::Declaration decl, RecursionContextArg ctx)
 {
 	switch (const auto kind = decl.sort())
 	{
@@ -450,7 +450,7 @@ std::string render_refered_declaration(reflifc::Declaration decl, RecursionConte
 	}
 }
 
-std::string render_namespace(reflifc::Declaration decl, RecursionContext& ctx)
+std::string render_namespace(reflifc::Declaration decl, RecursionContextArg ctx)
 {
 	reflifc::Declaration home_scope = get_home_scope(decl, ctx);
 
@@ -491,7 +491,7 @@ std::string_view render_as_neat_access_enum(ifc::Access access, std::string_view
 		std::format("Expected 0 to 3 (inclusive). While {0} was given.", static_cast<uint8_t>(access)));
 }
 
-bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBasis type, bool reflects_private_members, reflifc::Module root_module, RecursionContext& ctx)
+bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBasis type, bool reflects_private_members, reflifc::Module root_module, RecursionContextArg ctx)
 {
 	if (!is_type_visible_from_module(field_declaration.type(), root_module, ctx))
 	{
@@ -517,7 +517,7 @@ bool is_member_publicly_accessible(reflifc::Field field_declaration, ifc::TypeBa
 	return (member_access == Neat::Access::Public || reflects_private_members);
 }
 
-bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::TypeBasis type, bool reflects_private_members, reflifc::Module root_module, RecursionContext& ctx)
+bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::TypeBasis type, bool reflects_private_members, reflifc::Module root_module, RecursionContextArg ctx)
 {
 	if (!is_type_visible_from_module(method_declaration.type(), root_module, ctx))
 	{
@@ -543,7 +543,7 @@ bool is_member_publicly_accessible(reflifc::Method method_declaration, ifc::Type
 	return (member_access == Neat::Access::Public || reflects_private_members);
 }
 
-bool is_member_publicly_accessible(reflifc::AliasDeclaration alias_declaration, ifc::TypeBasis type, bool reflects_private_members, reflifc::Module root_module, RecursionContext& ctx)
+bool is_member_publicly_accessible(reflifc::AliasDeclaration alias_declaration, ifc::TypeBasis type, bool reflects_private_members, reflifc::Module root_module, RecursionContextArg ctx)
 {
 	if (!is_type_visible_from_module(alias_declaration.aliasee(), root_module, ctx)) {
 		return false;
@@ -567,7 +567,7 @@ bool is_member_publicly_accessible(reflifc::AliasDeclaration alias_declaration, 
 	return (member_access == Neat::Access::Public || reflects_private_members);
 }
 
-bool can_reflect_private_members(reflifc::Declaration type_decl, reflifc::Module root_module, RecursionContext& ctx)
+bool can_reflect_private_members(reflifc::Declaration type_decl, reflifc::Module root_module, RecursionContextArg ctx)
 {
 	for (auto expression : type_decl.friends())
 	{
@@ -638,7 +638,7 @@ bool can_reflect_private_members(reflifc::Declaration type_decl, reflifc::Module
 	return false;
 }
 
-bool is_type_visible_from_module(reflifc::Type type, reflifc::Module root_module, RecursionContext& ctx)
+bool is_type_visible_from_module(reflifc::Type type, reflifc::Module root_module, RecursionContextArg ctx)
 {
 	switch (type.sort())
 	{
@@ -691,19 +691,19 @@ bool is_type_visible_from_module(reflifc::Type type, reflifc::Module root_module
 	}
 }
 
-bool is_type_visible_from_module(reflifc::MethodType method, reflifc::Module root_module, RecursionContext& ctx)
+bool is_type_visible_from_module(reflifc::MethodType method, reflifc::Module root_module, RecursionContextArg ctx)
 {
 	return is_type_visible_from_module(method.return_type(), root_module, ctx) &&
 		std::ranges::all_of(method.parameters(), [root_module, &ctx](reflifc::Type type) { return is_type_visible_from_module(type, root_module, ctx); });
 }
 
-bool is_type_visible_from_module(reflifc::FunctionType function, reflifc::Module root_module, RecursionContext& ctx)
+bool is_type_visible_from_module(reflifc::FunctionType function, reflifc::Module root_module, RecursionContextArg ctx)
 {
 	return is_type_visible_from_module(function.return_type(), root_module, ctx) &&
 		std::ranges::all_of(function.parameters(), [root_module, &ctx](reflifc::Type type) { return is_type_visible_from_module(type, root_module, ctx); });
 }
 
-bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module root_module, RecursionContext& ctx)
+bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module root_module, RecursionContextArg ctx)
 {
 	ContextArea area_{ "While checking if Declaration '{}' is visible from module 'TODO Fill module name in'."sv, 
 		decl_sort_to_string(decl.sort()), 
@@ -728,7 +728,7 @@ bool is_type_visible_from_module(reflifc::Declaration decl, reflifc::Module root
 	}
 }
 
-bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module root_module, RecursionContext& ctx)
+bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module root_module, RecursionContextArg ctx)
 {
 	switch (expr.sort())
 	{
@@ -762,7 +762,7 @@ bool is_type_visible_from_module(reflifc::Expression expr, reflifc::Module root_
 	}
 }
 
-bool is_type_visible_from_module(reflifc::TemplateId template_id, reflifc::Module root_module, RecursionContext& ctx)
+bool is_type_visible_from_module(reflifc::TemplateId template_id, reflifc::Module root_module, RecursionContextArg ctx)
 {
 	RecursionContext new_ctx{ ctx };
 	auto arguments = template_id.arguments();
@@ -775,7 +775,7 @@ bool is_type_visible_from_module(reflifc::TemplateId template_id, reflifc::Modul
 		});
 }
 
-bool is_type_visible_from_module(reflifc::PathExpression path, reflifc::Module root_module, RecursionContext& ctx)
+bool is_type_visible_from_module(reflifc::PathExpression path, reflifc::Module root_module, RecursionContextArg ctx)
 {
 	try {
 		auto resolved_type = resolve_type(path, ctx);
@@ -848,10 +848,10 @@ struct GetHomeScope
 		return reflifc::Declaration{ nullptr, {} };
 	}
 
-	RecursionContext* ctx;
+	const RecursionContext* ctx;
 };
 
-reflifc::Declaration get_home_scope(const reflifc::Declaration& decl, RecursionContext& ctx)
+reflifc::Declaration get_home_scope(const reflifc::Declaration& decl, RecursionContextArg ctx)
 {
 	ContextArea area_{ "While getting the home scope."sv };
 
@@ -886,10 +886,10 @@ struct GetBasicSpecifiers
 		return ifc::BasicSpecifiers{};
 	}
 
-	RecursionContext* ctx;
+	const RecursionContext* ctx;
 };
 
-ifc::BasicSpecifiers get_basic_specifiers(reflifc::Declaration decl, RecursionContext& ctx)
+ifc::BasicSpecifiers get_basic_specifiers(reflifc::Declaration decl, RecursionContextArg ctx)
 {
 	ContextArea area_{ "While getting the basic specifiers."sv };
 
@@ -928,10 +928,10 @@ struct GetDeclarationName
 		return std::nullopt;
 	}
 
-	RecursionContext* ctx;
+	const RecursionContext* ctx;
 };
 
-std::optional<std::string_view> get_declaration_name(reflifc::Declaration decl, RecursionContext& ctx)
+std::optional<std::string_view> get_declaration_name(reflifc::Declaration decl, RecursionContextArg ctx)
 {
 	ContextArea area_{ "While getting the declaration name."sv };
 
@@ -940,7 +940,7 @@ std::optional<std::string_view> get_declaration_name(reflifc::Declaration decl, 
 	);
 }
 
-reflifc::Type resolve_type(reflifc::PathExpression path, RecursionContext& ctx)
+reflifc::Type resolve_type(reflifc::PathExpression path, RecursionContextArg ctx)
 {
 	reflifc::Name dependant_name{ nullptr, {} };
 	switch (path.member().sort()) {
@@ -977,7 +977,7 @@ reflifc::Type resolve_type(reflifc::PathExpression path, RecursionContext& ctx)
 	return resolve_type(path.scope(), dependant_name_str, ctx);
 }
 
-reflifc::Type resolve_type(reflifc::Expression scope, std::string_view dependant_name, RecursionContext& ctx)
+reflifc::Type resolve_type(reflifc::Expression scope, std::string_view dependant_name, RecursionContextArg ctx)
 {
 	switch (scope.sort()) {
 	case ifc::ExprSort::NamedDecl:
@@ -999,7 +999,7 @@ reflifc::Type resolve_type(reflifc::Expression scope, std::string_view dependant
 	}
 }
 
-reflifc::Type resolve_type(reflifc::Declaration scope, std::string_view dependant_name, RecursionContext& ctx)
+reflifc::Type resolve_type(reflifc::Declaration scope, std::string_view dependant_name, RecursionContextArg ctx)
 {
 	switch (scope.sort()) {
 	case ifc::DeclSort::Scope:
@@ -1029,7 +1029,7 @@ reflifc::Type resolve_type(reflifc::Declaration scope, std::string_view dependan
 }
 
 // Deal with template specializations
-reflifc::Declaration resolve_template_entity(reflifc::TemplateDeclaration template_decl, RecursionContext& ctx)
+reflifc::Declaration resolve_template_entity(reflifc::TemplateDeclaration template_decl, RecursionContextArg ctx)
 {
 	reflifc::Declaration template_scope = template_decl.entity();
 
@@ -1054,7 +1054,7 @@ reflifc::Declaration resolve_template_entity(reflifc::TemplateDeclaration templa
 	return template_scope;
 }
 
-bool does_specialization_fit(reflifc::Specialization specialization, RecursionContext& ctx)
+bool does_specialization_fit(reflifc::Specialization specialization, RecursionContextArg ctx)
 {
 	auto specialization_arguments = specialization.form().arguments();
 	auto& template_arguments = ctx.template_argument_sets.back();
@@ -1074,7 +1074,7 @@ bool does_specialization_fit(reflifc::Specialization specialization, RecursionCo
 	return true;
 }
 
-bool does_specialization_fit(reflifc::PartialSpecialization specialization, RecursionContext& ctx)
+bool does_specialization_fit(reflifc::PartialSpecialization specialization, RecursionContextArg ctx)
 {
 	// TODO: Implement partial specialization
 	return false;

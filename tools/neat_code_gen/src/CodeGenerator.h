@@ -58,21 +58,21 @@ private:
 		std::unordered_map<reflifc::TemplateId, ReflectableType> template_types;
 		std::unordered_set<reflifc::Type> fundamental_types; // Should be `ifc::FundamentalType*` but reflifc doesn't expose that yet.
 	};
-	void scan(reflifc::Scope scope_desc, RecursionContext& ctx, ReflectableTypes& out_types);
-	void scan(reflifc::Declaration decl, RecursionContext& ctx, ReflectableTypes& out_types);
-	void scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl, RecursionContext& ctx, ReflectableTypes& out_types);
-	void scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl, RecursionContext& ctx, ReflectableTypes& out_types);
-	void scan(reflifc::Type type, RecursionContext& ctx, ReflectableTypes& out_types);
-	void scan(reflifc::Expression expression, RecursionContext& ctx, ReflectableTypes& out_types);
-	void scan(reflifc::TemplateId template_id, RecursionContext& ctx, ReflectableTypes& out_types);
+	void scan(reflifc::Scope scope_desc, RecursionContextArg ctx, ReflectableTypes& out_types);
+	void scan(reflifc::Declaration decl, RecursionContextArg ctx, ReflectableTypes& out_types);
+	void scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl, RecursionContextArg ctx, ReflectableTypes& out_types);
+	void scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl, RecursionContextArg ctx, ReflectableTypes& out_types);
+	void scan(reflifc::Type type, RecursionContextArg ctx, ReflectableTypes& out_types);
+	void scan(reflifc::Expression expression, RecursionContextArg ctx, ReflectableTypes& out_types);
+	void scan(reflifc::TemplateId template_id, RecursionContextArg ctx, ReflectableTypes& out_types);
 
 	void render(const ifc::FundamentalType& type);
 	void render(ReflectableType& type, bool is_templated_type);
-	std::string render_field(std::string_view outer_class_type, ifc::Access default_access, const reflifc::Field& field, RecursionContext& ctx) const;
-	std::string render_method(std::string_view outer_class_type, ifc::Access default_access, const reflifc::Method& method, RecursionContext& ctx) const;
-	std::string render_base_class(std::string_view outer_class_type, ifc::Access default_access, const reflifc::BaseType& base_class, RecursionContext& ctx) const;
-	std::string render_member_alias(const reflifc::AliasDeclaration& member_alias, ifc::Access default_access, RecursionContext& ctx) const;
-	std::string render_template_argument(const reflifc::Expression& template_arg, RecursionContext& ctx) const;
+	std::string render_field(std::string_view outer_class_type, ifc::Access default_access, const reflifc::Field& field, RecursionContextArg ctx) const;
+	std::string render_method(std::string_view outer_class_type, ifc::Access default_access, const reflifc::Method& method, RecursionContextArg ctx) const;
+	std::string render_base_class(std::string_view outer_class_type, ifc::Access default_access, const reflifc::BaseType& base_class, RecursionContextArg ctx) const;
+	std::string render_member_alias(const reflifc::AliasDeclaration& member_alias, ifc::Access default_access, RecursionContextArg ctx) const;
+	std::string render_template_argument(const reflifc::Expression& template_arg, RecursionContextArg ctx) const;
 	
 private:
 	std::string code;
