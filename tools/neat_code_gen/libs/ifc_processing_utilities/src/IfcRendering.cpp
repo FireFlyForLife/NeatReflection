@@ -822,6 +822,84 @@ bool is_module_imported_in_module(reflifc::Module to_check, reflifc::Module root
 }
 
 
+bool is_reference_type(reflifc::Declaration decl, RecursionContextArg ctx)
+{
+	if (decl.is_reference()) {
+		return is_reference_type(decl.as_reference().referenced_declaration(*ctx.environment), ctx);
+	}
+	if (decl.is_parameter()) {
+		auto [argument, new_ctx] = ctx.get_template_parameter(decl.as_parameter());
+		if (argument.is_type()) {
+			return false;
+		}
+		return is_reference_type(argument.as_type(), new_ctx);
+	}
+
+	return false;
+}
+
+bool is_reference_type(reflifc::Type type, RecursionContextArg ctx)
+{
+	switch (type.sort()) {
+	case ifc::TypeSort::LvalueReference:
+	case ifc::TypeSort::RvalueReference:
+		return true;
+
+	case ifc::TypeSort::Designated:
+		return is_reference_type(type.designation(), ctx);
+	case ifc::TypeSort::Syntactic:
+		return is_reference_type(type.as_syntactic(), ctx);
+	case ifc::TypeSort::Typename:
+		return is_reference_type(resolve_type(type.typename_path(), ctx), ctx);
+	case ifc::TypeSort::Qualified:
+		return is_reference_type(type.as_qualified().unqualified(), ctx);
+
+	case ifc::TypeSort::Expansion:
+	case ifc::TypeSort::Tuple:
+		throw ContextualException("Multiple types are not supported yet for checking if it is a reference type.");
+
+	case ifc::TypeSort::VendorExtension:
+	case ifc::TypeSort::Fundamental:
+	case ifc::TypeSort::Tor:
+	case ifc::TypeSort::Pointer:
+	case ifc::TypeSort::PointerToMember:
+	case ifc::TypeSort::Function:
+	case ifc::TypeSort::Method:
+	case ifc::TypeSort::Array:
+	case ifc::TypeSort::Base:
+	case ifc::TypeSort::Decltype:
+	case ifc::TypeSort::Placeholder:
+	case ifc::TypeSort::Forall:
+	case ifc::TypeSort::Unaligned:
+	case ifc::TypeSort::SyntaxTree:
+		return false;
+
+	default:
+		throw ContextualException(std::format("Unexpected type sort while checking reference type: {}.", 
+			type_sort_to_string(type.sort())));
+	}
+}
+
+bool is_reference_type(reflifc::Expression expr, RecursionContextArg ctx)
+{
+	switch (expr.sort()) {
+	case ifc::ExprSort::Type:
+		return is_reference_type(expr.as_type(), ctx);
+	case ifc::ExprSort::NamedDecl:
+		return is_reference_type(expr.referenced_decl(), ctx);
+
+	case ifc::ExprSort::QualifiedName:
+	case ifc::ExprSort::UnqualifiedId:
+	case ifc::ExprSort::Path:
+		throw ContextualException(std::format("Dependant typenames etc are not supported yet for checking reference type. ExprSort: {}",
+			expr_sort_to_string(expr.sort())));
+
+	default:
+		return false;
+	}
+}
+
+
 // Get home scope
 template<typename T>
 concept HasHomeScope = requires(T t) {

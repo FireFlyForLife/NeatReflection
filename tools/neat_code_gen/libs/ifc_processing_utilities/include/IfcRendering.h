@@ -67,6 +67,10 @@ bool is_type_visible_from_module(reflifc::PathExpression path, reflifc::Module r
 struct ModuleCache {};
 bool is_module_imported_in_module(reflifc::Module to_check, reflifc::Module module_, ifc::Environment& environment);
 
+bool is_reference_type(reflifc::Declaration decl, RecursionContextArg ctx);
+bool is_reference_type(reflifc::Type type, RecursionContextArg ctx);
+bool is_reference_type(reflifc::Expression expr, RecursionContextArg ctx);
+
 reflifc::Declaration get_home_scope(const reflifc::Declaration& decl, RecursionContextArg ctx);
 ifc::BasicSpecifiers get_basic_specifiers(reflifc::Declaration decl, RecursionContextArg ctx);
 std::optional<std::string_view> get_declaration_name(reflifc::Declaration decl, RecursionContextArg ctx);

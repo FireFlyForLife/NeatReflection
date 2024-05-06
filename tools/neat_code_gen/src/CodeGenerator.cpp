@@ -174,33 +174,6 @@ void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declarat
 		break;
 	}
 }
-static bool is_reference_type(reflifc::Type type, RecursionContextArg ctx);
-static bool is_reference_type(reflifc::Declaration decl, RecursionContextArg ctx)
-{
-	if (decl.is_reference()) {
-		return is_reference_type(decl.as_reference().referenced_declaration(*ctx.environment), ctx);
-	}
-	if (decl.is_parameter()) {
-		auto[argument, new_ctx] = ctx.get_template_parameter(decl.as_parameter());
-		verify(argument.is_type()); // TODO: what if this is another parameter?
-		return is_reference_type(argument.as_type(), new_ctx);
-	}
-
-	return false;
-}
-
-static bool is_reference_type(reflifc::Type type, RecursionContextArg ctx)
-{
-	if (type.is_lvalue_reference() || type.is_rvalue_reference()) {
-		return true;
-	}
-
-	if (type.is_designated()) {
-		return is_reference_type(type.designation(), ctx);
-	}
-
-	return false;
-}
 
 void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl, RecursionContextArg ctx, ReflectableTypes& out_types)
 {
