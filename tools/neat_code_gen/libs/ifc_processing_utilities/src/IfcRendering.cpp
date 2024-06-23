@@ -840,6 +840,8 @@ bool is_reference_type(reflifc::Declaration decl, RecursionContextArg ctx)
 
 bool is_reference_type(reflifc::Type type, RecursionContextArg ctx)
 {
+	ContextArea area_{ "While checking if the type is a reference type."sv };
+
 	switch (type.sort()) {
 	case ifc::TypeSort::LvalueReference:
 	case ifc::TypeSort::RvalueReference:

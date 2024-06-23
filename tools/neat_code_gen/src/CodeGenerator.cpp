@@ -177,82 +177,33 @@ void CodeGenerator::scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declarat
 
 void CodeGenerator::scan(reflifc::ClassOrStruct scope_decl, reflifc::Declaration decl, RecursionContextArg ctx, ReflectableTypes& out_types)
 {
-	if (out_types.types.contains(decl)) {
-		return;
-	}
-	if (!is_type_visible_from_module(decl, reflifc::Module{ ifc_file }, ctx)) {
-		return;
-	}
+	ReflectableType type{};
 
-	ReflectableType type{ };
-	type.type_name = render_full_typename(decl, ctx);
-	type.default_access = scope_decl.access();
+	try {
+		// Did we already visit this declaration?
+		if (out_types.types.contains(decl)) {
+			return;
+		}
+		// Is this type visible from the module we are generating reflection data for?
+		if (!is_type_visible_from_module(decl, reflifc::Module{ ifc_file }, ctx)) {
+			return;
+		}
+
+		// Fill in basic info.
+		type.type_name = render_full_typename(decl, ctx);
+		type.default_access = scope_decl.access();
+	} catch (ContextualException& e) {
+		// TODO: If NeatReflection fails to understand the type, we mark this type as not reflectable.
+		return;
+	}
 
 	// Mark this type as being visited, at the end of this function we will fill in the full member info.
 	out_types.types.insert({ decl, type });
 
-	const bool reflect_privates = can_reflect_private_members(decl, reflifc::Module{ifc_file}, ctx);
-
-	auto declarations = scope_decl.members();
-	for (auto decl : declarations)
-	{
-		switch (decl.sort())
-		{
-		case ifc::DeclSort::Field:
-		{
-			const auto field = decl.as_field();
-
-			if (!is_reference_type(field.type(), ctx) 
-				&& is_member_publicly_accessible(field, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, ctx))
-			{
-				type.fields.push_back(field);
-				scan(field.type(), ctx, out_types);
-			}
-			break;
-		}
-		case ifc::DeclSort::Method:
-		{
-			const auto method = decl.as_method();
-			
-			if (!method.name().is_conversion()
-				&& is_member_publicly_accessible(method, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, ctx))
-			{
-				type.methods.push_back(method);
-
-				scan(method.type().return_type(), ctx, out_types);
-				
-				auto params = method.type().parameters();
-				for (auto param : params)
-				{
-					scan(param, ctx, out_types);
-				}
-			}
-			break;
-		}
-		case ifc::DeclSort::Alias:
-		{
-			const auto alias = decl.as_alias();
-			
-			if (is_member_publicly_accessible(alias, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, ctx)) {
-				type.aliases.push_back(alias);
-				scan(alias.aliasee(), ctx, out_types);
-			}
-
-			break;
-		}
-		}
-	}
-
-	auto bases = scope_decl.bases();
-	for (auto base : bases)
-	{
-		if (is_type_visible_from_module(base.type, reflifc::Module{ ifc_file }, ctx))
-		{
-			type.bases.push_back(base);
-			scan(base.type, ctx, out_types);
-		}
-	}
-
+	// Collect all accesible members.
+	collect_class_members(decl, scope_decl, ctx, type, out_types);
+	
+	// Fill in the full member info.
 	out_types.types.insert_or_assign(decl, std::move(type));
 }
 
@@ -366,20 +317,24 @@ void CodeGenerator::scan(reflifc::Expression expression, RecursionContextArg ctx
 
 void CodeGenerator::scan(reflifc::TemplateId template_id, RecursionContextArg ctx, ReflectableTypes& out_types)
 {
-	if (out_types.template_types.contains(template_id)) {
-		return;
-	}
-	if (!is_type_visible_from_module(template_id, reflifc::Module{ ifc_file }, ctx)) {
+	try {
+		if (out_types.template_types.contains(template_id)) {
+			return;
+		}
+		if (!is_type_visible_from_module(template_id, reflifc::Module{ ifc_file }, ctx)) {
+			return;
+		}
+		if (!template_id.primary().is_qualref() || !template_id.primary().referenced_decl().is_template()) {
+			return;
+		}
+	} catch (ContextualException&) {
+		// TODO: If NeatReflection fails to understand the type, we mark this type as not reflectable. */
 		return;
 	}
 
-	if (!template_id.primary().is_qualref() || !template_id.primary().referenced_decl().is_template()) {
-		return;
-	}
-	
 	auto templated_decl = template_id.primary().referenced_decl();
 	auto template_declaration = templated_decl.as_template();
-	
+
 	RecursionContext new_ctx{ ctx };
 	auto arguments = template_id.arguments();
 	new_ctx.template_argument_sets.emplace_back(arguments.begin(), arguments.end());
@@ -387,75 +342,146 @@ void CodeGenerator::scan(reflifc::TemplateId template_id, RecursionContextArg ct
 
 	if (template_entity.is_class_or_struct()) {
 		auto class_or_struct = template_entity.as_class_or_struct();
-		
+
 		ReflectableType template_type;
 		template_type.type_name = render_full_typename(template_id, ctx);
-		template_type.templates_context = new_ctx;
+		template_type.templates_context = new_ctx.template_argument_sets;
 		template_type.default_access = class_or_struct.access();
 
 		// Mark this type as visited, will be fill in at the end of this function
 		out_types.template_types.insert({ template_id, template_type });
 
-		const bool reflect_privates = can_reflect_private_members(templated_decl, reflifc::Module{ ifc_file }, new_ctx);
+		try {
+			// Collect all accesible members.
+			// TODO: Should I pass template_decl or template_entity?
+			collect_class_members(template_entity, class_or_struct, new_ctx, template_type, out_types);
 
-		for (auto decl : class_or_struct.members()) {
-			switch (decl.sort()) {
-			case ifc::DeclSort::Field:
-			{
-				const auto field = decl.as_field();
-
-				if (!is_reference_type(field.type(), new_ctx)
-					&& is_member_publicly_accessible(field, class_or_struct.kind(), reflect_privates, reflifc::Module{ ifc_file }, new_ctx)) {
-					template_type.fields.push_back(field);
-					scan(field.type(), new_ctx, out_types);
-				}
-				break;
-			}
-			case ifc::DeclSort::Method:
-			{
-				const auto method = decl.as_method();
-
-				if (!method.name().is_conversion()
-					&& is_member_publicly_accessible(method, class_or_struct.kind(), reflect_privates, reflifc::Module{ ifc_file }, new_ctx)) {
-					template_type.methods.push_back(method);
-
-					scan(method.type().return_type(), new_ctx, out_types);
-
-					auto params = method.type().parameters();
-					for (auto param : params) {
-						scan(param, new_ctx, out_types);
-					}
-				}
-				break;
-			}
-			case ifc::DeclSort::Alias:
-			{
-				const auto alias = decl.as_alias();
-
-				if (is_member_publicly_accessible(alias, class_or_struct.kind(), reflect_privates, reflifc::Module{ ifc_file }, new_ctx)) {
-					template_type.aliases.push_back(alias);
-					scan(alias.aliasee(), new_ctx, out_types);
-				}
-
-				break;
-			}
-			}
+			// Fill in the full member info.
+			out_types.template_types.insert_or_assign(template_id, std::move(template_type));
+		} catch (ContextualException&) { 
+			/* Failed to fill in class members, still continue to scan this classes template arguments.*/
+			/* TODO: Report warning, for development purposes. Because collect_class_members() should not throw. */
 		}
 
-		auto bases = class_or_struct.bases();
-		for (auto base : bases) {
-			if (is_type_visible_from_module(base.type, reflifc::Module{ ifc_file }, new_ctx)) {
-				template_type.bases.push_back(base);
-				scan(base.type, new_ctx, out_types);
-			}
+		// Continue scanning it's template arguments.
+		for (auto argument : template_id.arguments()) {
+			try {
+				scan(argument, ctx, out_types);
+			} catch (ContextualException&) { /* Oh well, this argument could not be parsed, continue to the next one! */ }
 		}
+	}
+}
 
-		out_types.template_types.insert_or_assign(template_id, template_type);
+void CodeGenerator::collect_class_members(reflifc::Declaration decl, reflifc::ClassOrStruct scope_decl, RecursionContextArg ctx, ReflectableType& inout_type, ReflectableTypes& out_other_types)
+{
+	bool reflect_privates;
+
+	try {
+		// Cache if we can reflect private members
+		reflect_privates = can_reflect_private_members(decl, reflifc::Module{ ifc_file }, ctx);
+	} catch (ContextualException& e) {
+		// TODO: Log this error, for fixing issues
+		return;
 	}
 
-	// Continue scanning it's template arguments
-	for (auto argument : template_id.arguments()) {
-		scan(argument, ctx, out_types);
+	// Collect all accesible members.
+	auto declarations = scope_decl.members();
+	for (auto decl : declarations) {
+		switch (decl.sort()) {
+		case ifc::DeclSort::Field:
+		{
+			const auto field = decl.as_field();
+
+			try {
+				// Reflect only fields neat reflection can reach (public, or with reflect_privates enabled).
+				// Also exclude reference types, as you cannot take the pointer to address of a reference value.
+				if (!is_reference_type(field.type(), ctx)
+					&& is_member_publicly_accessible(field, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, ctx)) {
+					// Mark this field as reflectable.
+					inout_type.fields.push_back({ field, true });
+
+					// Make sure to reflect the field's type too.
+					try {
+						scan(field.type(), ctx, out_other_types);
+					} catch (ContextualException&) { /* It's safe to ignore the error here :) */ }
+				}
+			} catch (ContextualException& e) {
+				// If NeatReflection fails to understand the type, we mark this field as not reflectable.
+				inout_type.fields.push_back({ field, false, e.what() });
+			}
+			break;
+		}
+		case ifc::DeclSort::Method:
+		{
+			const auto method = decl.as_method();
+
+			try {
+				// Reflect only methods neat reflection can reach (public, or with reflect_privates enabled).
+				// Also exclude conversion operators, as you cannot take the pointer to address.
+				if (!method.name().is_conversion()
+					&& is_member_publicly_accessible(method, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, ctx)) {
+					// Mark this method as reflectable
+					inout_type.methods.push_back({ method, true });
+
+					// Make sure to reflect the method's return type and parameter types too
+					try {
+						scan(method.type().return_type(), ctx, out_other_types);
+
+						auto params = method.type().parameters();
+						for (auto param : params) {
+							scan(param, ctx, out_other_types);
+						}
+					} catch (ContextualException&) { /* It's safe to ignore the error here :) */ }
+				}
+			} catch (ContextualException& e) {
+				// If NeatReflection fails to understand the type, we mark this method as not reflectable.
+				inout_type.methods.push_back({ method, false, e.what() });
+			}
+			break;
+		}
+		case ifc::DeclSort::Alias:
+		{
+			const auto alias = decl.as_alias();
+
+			try {
+				// Reflect only aliases neat reflection can reach (public, or with reflect_privates enabled).
+				if (is_member_publicly_accessible(alias, scope_decl.kind(), reflect_privates, reflifc::Module{ ifc_file }, ctx)) {
+					// Mark this alias as reflectable.
+					inout_type.aliases.push_back({ alias, true });
+
+					// Make sure to reflect the aliases pointee type.
+					try {
+						scan(alias.aliasee(), ctx, out_other_types);
+					} catch (ContextualException&) { /* It's safe to ignore the error here :) */ }
+				}
+			} catch (ContextualException& e) {
+				// If NeatReflection fails to understand the type, we mark this alias as not reflectable.
+				inout_type.aliases.push_back({ alias, false, e.what() });
+			}
+
+			break;
+		}
+		}
+	}
+
+	// Collect base classes.
+	auto bases = scope_decl.bases();
+	for (auto base : bases) {
+		try {
+			// Reflect only bases neat reflection can reach (public, or with reflect_privates enabled).
+			if (is_type_visible_from_module(base.type, reflifc::Module{ ifc_file }, ctx)) {
+				// Mark this base as reflectable.
+				inout_type.bases.push_back({ base, true });
+
+				// Make sure to reflect the bases's type too
+				try {
+					scan(base.type, ctx, out_other_types);
+				} catch (ContextualException&) { /* It's safe to ignore the error here :) */ }
+			}
+		} catch (ContextualException& e) {
+			// If NeatReflection fails to understand the type, we mark this base class as not reflectable.
+			inout_type.bases.push_back({ base, false, e.what() });
+		}
 	}
 }
 
@@ -476,36 +502,50 @@ void CodeGenerator::render(const ifc::FundamentalType& type)
 
 void CodeGenerator::render(ReflectableType& type, bool is_templated_type)
 {
-	auto& ctx = type.templates_context;
-	// TODO: don't store RecursionContext directly in ReflectableType, so we don't have to awkwardly fill in the environment here
-	ctx.environment = environment;
+	const RecursionContext ctx{ environment, type.templates_context };
 
 	std::string fields;
 	fields.reserve(32 * type.fields.size());
 	for (auto& field : type.fields) {
-		fields += render_field(type.type_name, type.default_access, field, ctx);
-		fields += ", ";
+		if (field.is_reflectable) {
+			fields += render_field(type.type_name, type.default_access, field.ifc_field, ctx);
+			fields += ", ";
+		} else {
+			// TODO: Write warning about unreflectable field.
+		}
 	}
 
 	std::string methods;
 	methods.reserve(32 * type.methods.size());
 	for (auto& method : type.methods) {
-		methods += render_method(type.type_name, type.default_access, method, ctx);
-		methods += ", ";
+		if (method.is_reflectable) {
+			methods += render_method(type.type_name, type.default_access, method.ifc_method, ctx);
+			methods += ", ";
+		} else {
+			// TODO: Write warning about unreflectable method.
+		}
 	}
 
 	std::string bases;
 	bases.reserve(32 * type.bases.size());
 	for (auto& base_class : type.bases) {
-		bases += render_base_class(type.type_name, type.default_access, base_class, ctx);
-		bases += ", ";
+		if (base_class.is_reflectable) {
+			bases += render_base_class(type.type_name, type.default_access, base_class.ifc_base, ctx);
+			bases += ", ";
+		} else {
+			// TODO: Write warning about unreflectable base class.
+		}
 	}
 
 	std::string aliases;
 	aliases.reserve(32 * type.aliases.size());
 	for (auto& alias : type.aliases) {
-		aliases += render_member_alias(alias, type.default_access, ctx);
-		aliases += ", ";
+		if (alias.is_reflectable) {
+			aliases += render_member_alias(alias.ifc_alias, type.default_access, ctx);
+			aliases += ", ";
+		} else {
+			// TODO: Write warning about unreflectable member alias.
+		}
 	}
 
 	std::string template_arguments;

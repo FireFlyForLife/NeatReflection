@@ -18,9 +18,14 @@
 // State neccesairy to pass onto the next functions
 struct RecursionContext
 {
-	ifc::Environment* environment;
-	std::vector<std::vector<reflifc::Expression>> template_argument_sets;
+	// Aliases
+	using TemplateArgumentSets = std::vector<std::vector<reflifc::Expression>>;
 
+	// Data
+	ifc::Environment* environment;
+	TemplateArgumentSets template_argument_sets;
+
+	// Functions
 	std::pair<reflifc::Expression, RecursionContext> get_template_parameter(reflifc::Parameter parameter) const;
 };
 // Immutably pass the recursion context down to functions

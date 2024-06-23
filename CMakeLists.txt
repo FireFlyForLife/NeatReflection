@@ -90,4 +90,6 @@ if(NOT ${CMAKE_GENERATOR} STREQUAL "Visual Studio 17 2022")
     message(WARNING "[NeatReflection] Only the Visual Studio 17 2022 generator has support for modules. The current generator is: ${CMAKE_GENERATOR}")
 endif()
 
-cmake_policy(SET CMP0143 NEW) # USE_FOLDERS global property is treated as ON by default.
+if(${CMP0143})
+    cmake_policy(SET CMP0143 NEW) # USE_FOLDERS global property is treated as ON by default.
+endif()

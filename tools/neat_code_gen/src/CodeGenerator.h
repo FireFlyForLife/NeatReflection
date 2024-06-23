@@ -40,24 +40,55 @@ public:
 	void write_cpp_file(reflifc::Module module, std::ostream& out);
 
 private:
+	struct ReflectableField
+	{
+		reflifc::Field ifc_field;
+		bool is_reflectable;
+		std::string failure_reason;
+	};
+
+	struct ReflectableMethod
+	{
+		reflifc::Method ifc_method;
+		bool is_reflectable;
+		std::string failure_reason;
+	};
+
+	struct ReflectableAlias
+	{
+		reflifc::AliasDeclaration ifc_alias;
+		bool is_reflectable;
+		std::string failure_reason;
+	};
+
+	struct ReflectableBaseClass
+	{
+		reflifc::BaseType ifc_base;
+		bool is_reflectable;
+		std::string failure_reason;
+	};
+
 	struct ReflectableType
 	{
 		std::string type_name;
-		ifc::Access default_access; // public for struct, private for class
+		ifc::Access default_access = ifc::Access::None; // public for struct, private for class
 
-		std::vector<reflifc::Field> fields;
-		std::vector<reflifc::Method> methods;
-		std::vector<reflifc::BaseType> bases;
-		std::vector<reflifc::AliasDeclaration> aliases;
+		std::vector<ReflectableBaseClass> bases;
 
-		RecursionContext templates_context{};
+		std::vector<ReflectableField> fields;
+		std::vector<ReflectableMethod> methods;
+		std::vector<ReflectableAlias> aliases;
+
+		RecursionContext::TemplateArgumentSets templates_context{};
 	};
+
 	struct ReflectableTypes
 	{
 		std::unordered_map<reflifc::Declaration, ReflectableType> types;
 		std::unordered_map<reflifc::TemplateId, ReflectableType> template_types;
 		std::unordered_set<reflifc::Type> fundamental_types; // Should be `ifc::FundamentalType*` but reflifc doesn't expose that yet.
 	};
+
 	void scan(reflifc::Scope scope_desc, RecursionContextArg ctx, ReflectableTypes& out_types);
 	void scan(reflifc::Declaration decl, RecursionContextArg ctx, ReflectableTypes& out_types);
 	void scan(reflifc::ScopeDeclaration scope_decl, reflifc::Declaration decl, RecursionContextArg ctx, ReflectableTypes& out_types);
@@ -65,6 +96,7 @@ private:
 	void scan(reflifc::Type type, RecursionContextArg ctx, ReflectableTypes& out_types);
 	void scan(reflifc::Expression expression, RecursionContextArg ctx, ReflectableTypes& out_types);
 	void scan(reflifc::TemplateId template_id, RecursionContextArg ctx, ReflectableTypes& out_types);
+	void collect_class_members(reflifc::Declaration decl, reflifc::ClassOrStruct scope_decl, RecursionContextArg ctx, ReflectableType& inout_type, ReflectableTypes& out_other_types);
 
 	void render(const ifc::FundamentalType& type);
 	void render(ReflectableType& type, bool is_templated_type);
