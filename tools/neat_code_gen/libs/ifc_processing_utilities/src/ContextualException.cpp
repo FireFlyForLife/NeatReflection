@@ -1,52 +1,56 @@
 #include "ContextualException.h"
 
 #include <format>
+#include <cassert>
 
 
-static thread_local std::vector<std::string> unrolling_context;
+static thread_local std::vector<IContextArea*> context_area_stack;
 
-ContextualException::ContextualException()
+
+ContextualException::ContextualException(std::string_view message, std::string_view context)
 {
-	unrolling_context.clear();
-}
+	// Prepare arguments
+	// Copy context area stack to prevent it from being modified during iteration
+	std::vector<IContextArea*> copy_context_area_stack = context_area_stack;
+	formatted_message.reserve(message.size() + copy_context_area_stack.size() * 32);
+	const auto indentation = "    ";
 
-ContextualException::ContextualException(std::string message) 
-	: message(std::move(message))
-{
-	unrolling_context.clear();
-}
+	// Start with the message
+	formatted_message += "Error:\n";
+	formatted_message += indentation;
+	formatted_message += message;
+	formatted_message += "\nContext:\n";
 
-ContextualException::ContextualException(std::string message, std::string context)
-	: message(std::move(message))
-	, context({ std::move(context) })
-{
-	unrolling_context.clear();
-}
+	// Optionally add the exception's context
+	if (!context.empty()) {
+		formatted_message += indentation;
+		formatted_message += context;
+		formatted_message += '\n';
+	}
 
-ContextualException::~ContextualException()
-{
-	unrolling_context.clear();
+	// Unroll the context stack in reverse
+	for (auto context_area_it = copy_context_area_stack.rbegin(); context_area_it != copy_context_area_stack.rend(); ++context_area_it) {
+		formatted_message += indentation;
+		formatted_message += (*context_area_it)->get_formatted_context();
+		formatted_message += '\n';
+	}
 }
 
 char const* ContextualException::what() const noexcept
 {
-	auto indentation = "    ";
-
-	std::string flattened_context;
-	for (auto context_entry : context)
-		flattened_context += indentation + context_entry + '\n';
-	for (auto context_entry : unrolling_context)
-		flattened_context += indentation + context_entry + '\n';
-
-	formatted_message = std::format("Error: \n{0}{1}\nContext: \n{2}", indentation, message, flattened_context);
-
 	return formatted_message.c_str();
 }
 
 namespace Detail
 {
-	void context_area_add_context_current_thread(std::string&& context_point)
+	void context_area_push(IContextArea& context_area) noexcept
 	{
-		unrolling_context.push_back(context_point);
+		context_area_stack.push_back(&context_area);
+	}
+
+	void context_area_pop(IContextArea& context_area) noexcept
+	{
+		assert(context_area_stack.back() == &context_area && "Context area's are supposed to be destructed in reverse order (like a stack).");
+		context_area_stack.pop_back();
 	}
 }
